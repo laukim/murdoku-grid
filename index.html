@@ -1,0 +1,1398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Murdoku Grid Helper</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 1.5rem;
+      background: #f5f5f5;
+      color: #222;
+      line-height: 1.4;
+    }
+
+    h1 {
+      margin: 0 0 0.25rem;
+      font-size: 1.4rem;
+      font-weight: 600;
+    }
+
+    .subtitle {
+      margin: 0 0 1.25rem;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .setup {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: end;
+      margin-bottom: 1.25rem;
+      padding: 1rem;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .field label {
+      font-size: 0.8rem;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .field input {
+      padding: 0.4rem 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.95rem;
+      min-width: 5rem;
+    }
+
+    .field input.wide {
+      min-width: 14rem;
+    }
+
+    button {
+      padding: 0.45rem 0.85rem;
+      border: 1px solid #888;
+      border-radius: 4px;
+      background: #fff;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    button:hover { background: #f0f0f0; }
+    button.primary {
+      background: #333;
+      color: #fff;
+      border-color: #333;
+    }
+    button.primary:hover { background: #555; }
+    button.active {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+
+    .workspace {
+      display: none;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .workspace.visible {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: flex-start;
+      width: 100%;
+    }
+
+    .sidebar {
+      flex-shrink: 0;
+      width: 11rem;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 0.75rem;
+    }
+
+    .sidebar h2 {
+      margin: 0 0 0.5rem;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #666;
+    }
+
+    .char-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+
+    .char-btn {
+      text-align: left;
+      padding: 0.5rem 0.65rem;
+      font-weight: 500;
+    }
+
+    .char-btn.selected {
+      background: #dbeafe;
+      border-color: #2563eb;
+    }
+
+    .char-btn.placed {
+      opacity: 0.55;
+    }
+
+    .tools {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+
+    .hint {
+      font-size: 0.78rem;
+      color: #666;
+      margin: 0;
+    }
+
+    .hint kbd {
+      background: #eee;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 0 0.25rem;
+      font-size: 0.75rem;
+    }
+
+    .grid-wrap {
+      --cell-size: 48px;
+      --axis-gap: 0.35rem;
+      flex: 1;
+      min-width: 0;
+      overflow: auto;
+      padding: 0.25rem;
+    }
+
+    .grid-board {
+      display: grid;
+      grid-template-columns: var(--cell-size) max-content;
+      grid-template-rows: auto max-content;
+      column-gap: var(--axis-gap);
+      row-gap: var(--axis-gap);
+      width: fit-content;
+      max-width: 100%;
+    }
+
+    .grid-stack {
+      position: relative;
+      width: fit-content;
+      grid-column: 2;
+      grid-row: 2;
+    }
+
+    .grid {
+      display: grid;
+      gap: 0;
+      border: 2px solid #333;
+      background: #fff;
+      width: fit-content;
+      touch-action: none;
+    }
+
+    .room-edges {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    .room-edge {
+      position: absolute;
+      pointer-events: auto;
+      background: transparent;
+    }
+
+    .room-edge:hover {
+      background: rgba(37, 99, 235, 0.12);
+    }
+
+    .room-edge.drag-active {
+      background: rgba(37, 99, 235, 0.2);
+    }
+
+    .room-edges.dragging-h .room-edge-v {
+      pointer-events: none;
+    }
+
+    .room-edges.dragging-v .room-edge-h {
+      pointer-events: none;
+    }
+
+    .room-edge-h.bold::before,
+    .room-edge-v.bold::before {
+      content: '';
+      position: absolute;
+      background: #111;
+      pointer-events: none;
+    }
+
+    .room-edge-h.bold::before {
+      left: 0;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      height: 4px;
+    }
+
+    .room-edge-v.bold::before {
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 4px;
+    }
+
+    .cell {
+      width: var(--cell-size);
+      height: var(--cell-size);
+      background: #fff;
+      border: 1px solid #999;
+      box-sizing: border-box;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cell.wall-top { border-top: 4px solid #111; }
+    .cell.wall-bottom { border-bottom: 4px solid #111; }
+    .cell.wall-left { border-left: 4px solid #111; }
+    .cell.wall-right { border-right: 4px solid #111; }
+
+    .cell:hover { background: #f8fafc; }
+
+    .cell.pressing { background: #fef3c7; }
+    .cell.long-press-ready {
+      background: #fde68a;
+      outline: 2px solid #f59e0b;
+      outline-offset: -2px;
+    }
+
+    .cell.drag-over { background: #eff6ff; }
+
+    .cell .confirmed {
+      font-size: calc(var(--cell-size) * 0.38);
+      font-weight: 700;
+    }
+
+    .cell .marks {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      width: 100%;
+      height: 100%;
+      padding: 2px;
+      gap: 0;
+    }
+
+    .cell .mark {
+      font-size: calc(var(--cell-size) * 0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    .char-btn .char-label {
+      font-weight: 700;
+    }
+
+    .cell.has-confirmed {
+      background: #ecfdf5;
+    }
+
+    .cell.row-col-blocked {
+      background: #fafafa;
+    }
+
+    .cell .x-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: calc(var(--cell-size) * 0.55);
+      color: #bbb;
+      pointer-events: none;
+      font-weight: 300;
+      line-height: 1;
+    }
+
+    .cell.obstacle {
+      background: #e5e7eb;
+      cursor: not-allowed;
+    }
+
+    .cell.obstacle:hover { background: #e5e7eb; }
+
+    .cell.obstacle .obstacle-icon {
+      font-size: calc(var(--cell-size) * 0.45);
+      color: #6b7280;
+      line-height: 1;
+      pointer-events: none;
+    }
+
+    .cell.user-blocked .x-overlay {
+      color: #888;
+      font-weight: 500;
+    }
+
+    .row-labels, .col-labels {
+      display: grid;
+      gap: 0;
+    }
+
+    .corner {
+      width: var(--cell-size);
+      height: 1.4rem;
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .col-labels {
+      grid-column: 2;
+      grid-row: 1;
+      padding-left: 2px;
+    }
+
+    .row-labels {
+      grid-column: 1;
+      grid-row: 2;
+      padding-top: 2px;
+    }
+
+    .axis-label {
+      width: var(--cell-size);
+      height: 1.4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      color: #888;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <h1>Murdoku Grid Helper</h1>
+  <p class="subtitle">Pencil-mark candidates, place people, auto cross-out row &amp; column.</p>
+
+  <div class="setup">
+    <div class="field">
+      <label for="size">Grid size</label>
+      <input id="size" type="number" min="2" max="20" value="6">
+    </div>
+    <div class="field">
+      <label for="labels">Character labels (optional)</label>
+      <input id="labels" class="wide" type="text" placeholder="e.g. Ana, Ben, Cal or leave blank for A–E, V">
+    </div>
+    <button class="primary" id="createBtn">Create grid</button>
+  </div>
+
+  <div class="workspace" id="workspace">
+    <aside class="sidebar">
+      <h2>Characters</h2>
+      <div class="char-list" id="charList"></div>
+
+      <h2>Tools</h2>
+      <div class="tools">
+        <button class="tool-btn" data-mode="obstacle">Obstacle</button>
+        <button class="tool-btn" data-mode="x">Mark X</button>
+        <button class="tool-btn" data-mode="erase">Erase</button>
+        <button id="undoBtn">Undo</button>
+        <button id="clearBtn">Clear all</button>
+      </div>
+
+      <p class="hint">Press a letter, then use the grid.<br>
+        Click = pencil mark · Long-press = place · Drag = mark across cells<br>
+      Click internal grid lines to toggle room walls · Drag along walls to paint many<br>
+        <kbd>O</kbd> obstacle · <kbd>A</kbd>–<kbd>Z</kbd> &amp; <kbd>V</kbd> select · <kbd>X</kbd> mark X · Erase clears</p>
+    </aside>
+
+    <div class="grid-wrap" id="gridWrap">
+      <div class="grid-board">
+        <div class="corner"></div>
+        <div class="col-labels" id="colLabels"></div>
+        <div class="row-labels" id="rowLabels"></div>
+        <div class="grid-stack" id="gridStack">
+          <div class="grid" id="grid"></div>
+          <div class="room-edges" id="roomEdges"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /** @typedef {'pencil'|'obstacle'|'x'|'erase'} ToolMode */
+
+    const LONG_PRESS_MS = 450;
+    const MOVE_THRESHOLD = 8;
+    const CHAR_COLORS = [
+      '#e11d48', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2',
+      '#ea580c', '#be185d', '#4f46e5', '#059669', '#b45309', '#7c3aed',
+      '#0d9488', '#dc2626', '#1d4ed8', '#15803d', '#a16207', '#6d28d9',
+      '#0369a1', '#c2410c', '#9d174d', '#4338ca', '#047857', '#92400e',
+      '#5b21b6', '#0e7490',
+    ];
+
+    let size = 0;
+    /** @type {string[]} */
+    let characters = [];
+    /** @type {number|null} */
+    let selectedChar = null;
+    /** @type {ToolMode} */
+    let mode = 'pencil';
+
+    /** @type {null | {
+     *   pointerId: number,
+     *   startR: number, startC: number,
+     *   startX: number, startY: number,
+     *   cellEl: HTMLElement,
+     *   longPressTimer: ReturnType<typeof setTimeout>|null,
+     *   longPressReady: boolean,
+     *   isDragging: boolean,
+     *   visited: Set<string>,
+     *   historyPushed: boolean,
+     * }} */
+    let gesture = null;
+
+    /** @type {null | {
+     *   pointerId: number,
+     *   addMode: boolean,
+     *   visited: Set<string>,
+     *   historyPushed: boolean,
+     *   edgeType: 'h' | 'v',
+     *   fixedIndex: number,
+     * }} */
+    let wallGesture = null;
+
+    const WALL_HIT = 10;
+    const GRID_BORDER = 2;
+
+    /**
+     * Cell state:
+     * - confirmed: character index placed here, or null
+     * - pencil: Set of char indices marked as candidates
+     * - blocked: user-marked X — no one can be placed here
+     * - obstacle: fixed obstacle — nothing can be placed here
+     */
+    /** @type {{ confirmed: (number|null)[], pencil: Set<number>[], blocked: boolean, obstacle: boolean }[]} */
+    let board = [];
+    /** @type {typeof board[]} */
+    let history = [];
+    /** @type {Set<string>} keys like "h,r,c" or "v,r,c" */
+    let roomEdges = new Set();
+
+    const els = {
+      size: document.getElementById('size'),
+      labels: document.getElementById('labels'),
+      createBtn: document.getElementById('createBtn'),
+      workspace: document.getElementById('workspace'),
+      gridWrap: document.getElementById('gridWrap'),
+      charList: document.getElementById('charList'),
+      grid: document.getElementById('grid'),
+      gridStack: document.getElementById('gridStack'),
+      roomEdgesLayer: document.getElementById('roomEdges'),
+      rowLabels: document.getElementById('rowLabels'),
+      colLabels: document.getElementById('colLabels'),
+      undoBtn: document.getElementById('undoBtn'),
+      clearBtn: document.getElementById('clearBtn'),
+    };
+
+    function snapshotState() {
+      return {
+        board: cloneBoard(board),
+        roomEdges: new Set(roomEdges),
+      };
+    }
+
+    function restoreSnapshot(snap) {
+      board = snap.board;
+      roomEdges = snap.roomEdges;
+    }
+
+    function cloneBoard(src) {
+      return src.map(row =>
+        row.map(cell => ({
+          confirmed: cell.confirmed,
+          pencil: new Set(cell.pencil),
+          blocked: cell.blocked,
+          obstacle: cell.obstacle,
+        }))
+      );
+    }
+
+    function pushHistory() {
+      history.push(snapshotState());
+      if (history.length > 100) history.shift();
+    }
+
+    function undo() {
+      if (!history.length) return;
+      restoreSnapshot(history.pop());
+      renderGrid();
+      renderRoomEdges();
+      renderCharList();
+    }
+
+    function charColor(i) {
+      const name = characters[i];
+      if (name.length === 1) {
+        const code = name.toUpperCase().charCodeAt(0);
+        if (code >= 65 && code <= 90) return CHAR_COLORS[code - 65];
+      }
+      return CHAR_COLORS[i % CHAR_COLORS.length];
+    }
+
+    function defaultLabels(n) {
+      const labels = [];
+      for (let i = 0; i < n - 1; i++) {
+        labels.push(String.fromCharCode(65 + i));
+      }
+      labels.push('V');
+      return labels;
+    }
+
+    function parseLabels(raw, n) {
+      const trimmed = raw.trim();
+      if (!trimmed) {
+        return defaultLabels(n);
+      }
+      const parts = trimmed.split(/[,;\s]+/).filter(Boolean);
+      if (parts.length !== n) {
+        alert(`Expected ${n} labels, got ${parts.length}. Using A–…, V instead.`);
+        return defaultLabels(n);
+      }
+      return parts;
+    }
+
+    function createEmptyBoard(n) {
+      return Array.from({ length: n }, () =>
+        Array.from({ length: n }, () => ({
+          confirmed: null,
+          pencil: new Set(),
+          blocked: false,
+          obstacle: false,
+        }))
+      );
+    }
+
+    function charIsPlaced(ci) {
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          if (board[r][c].confirmed === ci) return true;
+        }
+      }
+      return false;
+    }
+
+    function getConfirmedAt(r, c) {
+      return board[r][c].confirmed;
+    }
+
+    function isRowColBlocked(r, c) {
+      for (let j = 0; j < size; j++) {
+        if (j !== c && board[r][j].confirmed !== null) return true;
+      }
+      for (let i = 0; i < size; i++) {
+        if (i !== r && board[i][c].confirmed !== null) return true;
+      }
+      return false;
+    }
+
+    function cellIsUnavailable(r, c) {
+      return board[r][c].obstacle || board[r][c].blocked || isRowColBlocked(r, c);
+    }
+
+    function clearCellMarks(r, c) {
+      const cell = board[r][c];
+      if (cell.confirmed !== null) removePlacement(r, c);
+      cell.pencil.clear();
+      cell.blocked = false;
+    }
+
+    function updateCellSize() {
+      if (!size || !els.workspace.classList.contains('visible')) return;
+      const padding = 12;
+      const border = 4;
+      const gapPx = parseFloat(getComputedStyle(els.gridWrap).fontSize) * 0.35;
+      const axisH = els.colLabels.offsetHeight || 22;
+      const availW = els.gridWrap.clientWidth - padding;
+      const availH = window.innerHeight - els.gridWrap.getBoundingClientRect().top - axisH - gapPx - padding;
+      const cellFromW = Math.floor((availW - gapPx - border) / (size + 1));
+      const cellFromH = Math.floor((availH - gapPx - border) / size);
+      let cell = Math.min(cellFromW, cellFromH);
+      cell = Math.max(28, Math.min(cell, 160));
+      els.gridWrap.style.setProperty('--cell-size', `${cell}px`);
+    }
+
+    function applyPlacement(ci, r, c) {
+      board[r][c].confirmed = ci;
+      board[r][c].pencil.clear();
+      board[r][c].blocked = false;
+
+      for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+          if (i === r && j === c) continue;
+          board[i][j].pencil.delete(ci);
+          if (board[i][j].confirmed === ci) board[i][j].confirmed = null;
+        }
+      }
+
+      for (let j = 0; j < size; j++) {
+        if (j === c) continue;
+        const cell = board[r][j];
+        if (cell.confirmed !== null && cell.confirmed !== ci) {
+          cell.confirmed = null;
+        }
+        cell.pencil.clear();
+      }
+      for (let i = 0; i < size; i++) {
+        if (i === r) continue;
+        const cell = board[i][c];
+        if (cell.confirmed !== null && cell.confirmed !== ci) {
+          cell.confirmed = null;
+        }
+        cell.pencil.clear();
+      }
+    }
+
+    function removePlacement(r, c) {
+      const ci = board[r][c].confirmed;
+      if (ci === null) return;
+      board[r][c].confirmed = null;
+    }
+
+    function ensureGestureHistory() {
+      if (!gesture || gesture.historyPushed) return;
+      pushHistory();
+      gesture.historyPushed = true;
+    }
+
+    /** @returns {boolean} whether the board changed */
+    function applyCellAction(r, c, action) {
+      const cell = board[r][c];
+
+      if (action === 'x-toggle') {
+        if (cell.obstacle || cell.confirmed !== null) return false;
+        if (cell.blocked) {
+          cell.blocked = false;
+          return true;
+        }
+        cell.pencil.clear();
+        cell.blocked = true;
+        return true;
+      }
+
+      if (action === 'x-add') {
+        if (cell.obstacle || cell.confirmed !== null || cell.blocked) return false;
+        cell.pencil.clear();
+        cell.blocked = true;
+        return true;
+      }
+
+      if (action === 'erase') {
+        if (cell.obstacle) {
+          cell.obstacle = false;
+          return true;
+        }
+        if (cell.blocked) {
+          cell.blocked = false;
+          return true;
+        }
+        if (selectedChar === null) return false;
+        const ci = selectedChar;
+        if (cell.confirmed === ci) {
+          removePlacement(r, c);
+          return true;
+        }
+        const had = cell.pencil.has(ci);
+        cell.pencil.delete(ci);
+        return had;
+      }
+
+      if (selectedChar === null) return false;
+      const ci = selectedChar;
+
+      if (action === 'obstacle-toggle') {
+        if (cell.obstacle) {
+          cell.obstacle = false;
+          return true;
+        }
+        clearCellMarks(r, c);
+        cell.obstacle = true;
+        return true;
+      }
+
+      if (action === 'obstacle-add') {
+        if (cell.obstacle) return false;
+        clearCellMarks(r, c);
+        cell.obstacle = true;
+        return true;
+      }
+
+      if (action === 'pencil-toggle') {
+        if (cell.confirmed === ci) {
+          removePlacement(r, c);
+          return true;
+        }
+        if (cell.confirmed !== null || cellIsUnavailable(r, c)) return false;
+        if (cell.pencil.has(ci)) cell.pencil.delete(ci);
+        else cell.pencil.add(ci);
+        return true;
+      }
+
+      if (action === 'pencil-add') {
+        if (cell.confirmed !== null || cellIsUnavailable(r, c)) return false;
+        if (cell.pencil.has(ci)) return false;
+        cell.pencil.add(ci);
+        return true;
+      }
+
+      if (action === 'place') {
+        if (cell.confirmed === ci) {
+          removePlacement(r, c);
+          return true;
+        }
+        if (cell.confirmed !== null || cellIsUnavailable(r, c)) return false;
+        applyPlacement(ci, r, c);
+        return true;
+      }
+
+      return false;
+    }
+
+    function dragActionForMode() {
+      if (mode === 'obstacle') return 'obstacle-add';
+      if (mode === 'x') return 'x-add';
+      if (mode === 'erase') return 'erase';
+      return 'pencil-add';
+    }
+
+    function tapActionForMode() {
+      if (mode === 'obstacle') return 'obstacle-toggle';
+      if (mode === 'x') return 'x-toggle';
+      if (mode === 'erase') return 'erase';
+      return 'pencil-toggle';
+    }
+
+    function cellKey(r, c) {
+      return `${r},${c}`;
+    }
+
+    function getCellFromElement(el) {
+      while (el && el !== els.grid) {
+        if (el.classList?.contains('cell')) {
+          return {
+            r: Number(el.dataset.r),
+            c: Number(el.dataset.c),
+            el,
+          };
+        }
+        el = el.parentElement;
+      }
+      return null;
+    }
+
+    function getCellFromPoint(x, y) {
+      const el = document.elementFromPoint(x, y);
+      if (!el) return null;
+      return getCellFromElement(el);
+    }
+
+    function clearGestureVisuals() {
+      els.grid.querySelectorAll('.cell.pressing, .cell.long-press-ready, .cell.drag-over')
+        .forEach(el => el.classList.remove('pressing', 'long-press-ready', 'drag-over'));
+    }
+
+    function endGesture() {
+      if (!gesture) return;
+      if (gesture.longPressTimer) clearTimeout(gesture.longPressTimer);
+      clearGestureVisuals();
+      gesture = null;
+    }
+
+    function applyRoomWallClasses(div, r, c) {
+      if (r > 0 && roomEdges.has(`h,${r - 1},${c}`)) div.classList.add('wall-top');
+      if (r < size - 1 && roomEdges.has(`h,${r},${c}`)) div.classList.add('wall-bottom');
+      if (c > 0 && roomEdges.has(`v,${r},${c - 1}`)) div.classList.add('wall-left');
+      if (c < size - 1 && roomEdges.has(`v,${r},${c}`)) div.classList.add('wall-right');
+    }
+
+    function setRoomEdge(key, bold) {
+      if (bold) roomEdges.add(key);
+      else roomEdges.delete(key);
+    }
+
+    function refreshCellWallClasses(r, c) {
+      const div = els.grid.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+      if (!div) return;
+      div.classList.remove('wall-top', 'wall-bottom', 'wall-left', 'wall-right');
+      applyRoomWallClasses(div, r, c);
+    }
+
+    function refreshWallEdgeVisual(key) {
+      const el = els.roomEdgesLayer.querySelector(`[data-edge="${key}"]`);
+      if (el) el.classList.toggle('bold', roomEdges.has(key));
+      const [type, rs, cs] = key.split(',');
+      const r = Number(rs);
+      const c = Number(cs);
+      if (type === 'h') {
+        refreshCellWallClasses(r, c);
+        refreshCellWallClasses(r + 1, c);
+      } else {
+        refreshCellWallClasses(r, c);
+        refreshCellWallClasses(r, c + 1);
+      }
+    }
+
+    /** @returns {boolean} */
+    function applyWallEdge(key, addMode) {
+      if (roomEdges.has(key) === addMode) return false;
+      setRoomEdge(key, addMode);
+      refreshWallEdgeVisual(key);
+      return true;
+    }
+
+    function getCellSizePx() {
+      return parseFloat(getComputedStyle(els.gridWrap).getPropertyValue('--cell-size')) || 0;
+    }
+
+    function parseEdgeKey(key) {
+      const [type, rs, cs] = key.split(',');
+      return { type, r: Number(rs), c: Number(cs) };
+    }
+
+    function getGridInnerCoords(x, y) {
+      const gridRect = els.grid.getBoundingClientRect();
+      return {
+        relX: x - gridRect.left - GRID_BORDER,
+        relY: y - gridRect.top - GRID_BORDER,
+        cell: getCellSizePx(),
+      };
+    }
+
+    /** Pick closest wall edge at a point (for click / drag start). */
+    function pickRoomEdgeAtPoint(x, y) {
+      const { relX, relY, cell } = getGridInnerCoords(x, y);
+      if (!cell || !size) return null;
+
+      const halfHit = WALL_HIT / 2;
+      let bestKey = null;
+      let bestDist = halfHit + 1;
+
+      for (let r = 0; r < size - 1; r++) {
+        const dist = Math.abs(relY - (r + 1) * cell);
+        if (dist > halfHit) continue;
+        const c = Math.floor(relX / cell);
+        if (c < 0 || c >= size) continue;
+        const key = `h,${r},${c}`;
+        if (dist < bestDist - 0.001 || (Math.abs(dist - bestDist) < 0.001 && bestKey?.startsWith('v'))) {
+          bestDist = dist;
+          bestKey = key;
+        }
+      }
+
+      for (let c = 0; c < size - 1; c++) {
+        const dist = Math.abs(relX - (c + 1) * cell);
+        if (dist > halfHit) continue;
+        const r = Math.floor(relY / cell);
+        if (r < 0 || r >= size) continue;
+        const key = `v,${r},${c}`;
+        if (dist < bestDist - 0.001) {
+          bestDist = dist;
+          bestKey = key;
+        }
+      }
+
+      return bestKey;
+    }
+
+    /** During drag, stay on the same row (h) or column (v) as the stroke started. */
+    function getRoomEdgeAlongDrag(x, y) {
+      if (!wallGesture || !size) return null;
+      const { relX, relY, cell } = getGridInnerCoords(x, y);
+      if (!cell) return null;
+
+      if (wallGesture.edgeType === 'h') {
+        const r = wallGesture.fixedIndex;
+        if (r < 0 || r >= size - 1) return null;
+        const c = Math.floor(relX / cell);
+        if (c < 0 || c >= size) return null;
+        return `h,${r},${c}`;
+      }
+
+      const c = wallGesture.fixedIndex;
+      if (c < 0 || c >= size - 1) return null;
+      const r = Math.floor(relY / cell);
+      if (r < 0 || r >= size) return null;
+      return `v,${r},${c}`;
+    }
+
+    function bindWallDocListeners() {
+      document.addEventListener('pointermove', onWallDocPointerMove);
+      document.addEventListener('pointerup', onWallDocPointerUp);
+      document.addEventListener('pointercancel', onWallDocPointerUp);
+    }
+
+    function unbindWallDocListeners() {
+      document.removeEventListener('pointermove', onWallDocPointerMove);
+      document.removeEventListener('pointerup', onWallDocPointerUp);
+      document.removeEventListener('pointercancel', onWallDocPointerUp);
+    }
+
+    function endWallGesture() {
+      if (!wallGesture) return;
+      els.roomEdgesLayer.querySelectorAll('.room-edge.drag-active')
+        .forEach(el => el.classList.remove('drag-active'));
+      els.roomEdgesLayer.classList.remove('dragging-h', 'dragging-v');
+      wallGesture = null;
+    }
+
+    function applyWallDragEdge(key) {
+      if (!wallGesture || wallGesture.visited.has(key)) return;
+      wallGesture.visited.add(key);
+      applyWallEdge(key, wallGesture.addMode);
+      els.roomEdgesLayer.querySelector(`[data-edge="${key}"]`)?.classList.add('drag-active');
+    }
+
+    function onWallPointerDown(e) {
+      if (!size || e.button !== 0) return;
+      const key = pickRoomEdgeAtPoint(e.clientX, e.clientY);
+      if (!key) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const { type, r, c } = parseEdgeKey(key);
+      pushHistory();
+      wallGesture = {
+        pointerId: e.pointerId,
+        addMode: !roomEdges.has(key),
+        visited: new Set(),
+        historyPushed: true,
+        edgeType: /** @type {'h'|'v'} */ (type),
+        fixedIndex: type === 'h' ? r : c,
+      };
+
+      els.roomEdgesLayer.classList.add(type === 'h' ? 'dragging-h' : 'dragging-v');
+      applyWallDragEdge(key);
+      bindWallDocListeners();
+    }
+
+    function onWallDocPointerMove(e) {
+      if (!wallGesture || wallGesture.pointerId !== e.pointerId) return;
+      const key = getRoomEdgeAlongDrag(e.clientX, e.clientY);
+      if (key) applyWallDragEdge(key);
+    }
+
+    function onWallDocPointerUp(e) {
+      if (!wallGesture || wallGesture.pointerId !== e.pointerId) return;
+      endWallGesture();
+      unbindWallDocListeners();
+    }
+
+    function renderRoomEdges() {
+      els.roomEdgesLayer.innerHTML = '';
+      if (!size) return;
+
+      const cs = 'var(--cell-size)';
+      const hit = WALL_HIT;
+      const inset = hit / 2;
+
+      for (let r = 0; r < size - 1; r++) {
+        for (let c = 0; c < size; c++) {
+          const key = `h,${r},${c}`;
+          const div = document.createElement('div');
+          div.className = 'room-edge room-edge-h' + (roomEdges.has(key) ? ' bold' : '');
+          div.dataset.edge = key;
+          div.style.left = `calc(${c} * ${cs} + ${inset}px)`;
+          div.style.top = `calc(${(r + 1)} * ${cs} - ${hit / 2}px)`;
+          div.style.width = `calc(${cs} - ${hit}px)`;
+          div.style.height = `${hit}px`;
+          div.title = 'Click or drag along this wall';
+          els.roomEdgesLayer.appendChild(div);
+        }
+      }
+
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size - 1; c++) {
+          const key = `v,${r},${c}`;
+          const div = document.createElement('div');
+          div.className = 'room-edge room-edge-v' + (roomEdges.has(key) ? ' bold' : '');
+          div.dataset.edge = key;
+          div.style.left = `calc(${(c + 1)} * ${cs} - ${hit / 2}px)`;
+          div.style.top = `calc(${r} * ${cs} + ${inset}px)`;
+          div.style.width = `${hit}px`;
+          div.style.height = `calc(${cs} - ${hit}px)`;
+          div.title = 'Click or drag along this wall';
+          els.roomEdgesLayer.appendChild(div);
+        }
+      }
+    }
+
+    function buildCellElement(r, c) {
+      const cell = board[r][c];
+      const div = document.createElement('div');
+      div.className = 'cell';
+      div.dataset.r = String(r);
+      div.dataset.c = String(c);
+      applyRoomWallClasses(div, r, c);
+
+      if (cell.obstacle) {
+        div.classList.add('obstacle');
+        const icon = document.createElement('span');
+        icon.className = 'obstacle-icon';
+        icon.textContent = '▪';
+        div.appendChild(icon);
+        return div;
+      }
+
+      if (cell.confirmed !== null) {
+        div.classList.add('has-confirmed');
+        const span = document.createElement('span');
+        span.className = 'confirmed';
+        span.textContent = characters[cell.confirmed];
+        span.style.color = charColor(cell.confirmed);
+        div.appendChild(span);
+      } else if (cell.blocked || isRowColBlocked(r, c)) {
+        if (cell.blocked) div.classList.add('user-blocked');
+        if (isRowColBlocked(r, c)) div.classList.add('row-col-blocked');
+        const x = document.createElement('span');
+        x.className = 'x-overlay';
+        x.textContent = '×';
+        div.appendChild(x);
+      } else if (cell.pencil.size > 0) {
+        const marks = document.createElement('div');
+        marks.className = 'marks';
+        const markCols = Math.ceil(Math.sqrt(size));
+        const markRows = Math.ceil(size / markCols);
+        marks.style.gridTemplateColumns = `repeat(${markCols}, 1fr)`;
+        marks.style.gridTemplateRows = `repeat(${markRows}, 1fr)`;
+        for (let s = 0; s < markCols * markRows; s++) {
+          const m = document.createElement('span');
+          m.className = 'mark';
+          if (s < size && cell.pencil.has(s)) {
+            m.textContent = characters[s];
+            m.style.color = charColor(s);
+          }
+          marks.appendChild(m);
+        }
+        div.appendChild(marks);
+      }
+      return div;
+    }
+
+    function refreshCell(r, c) {
+      const old = els.grid.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+      if (!old) return null;
+      const neu = buildCellElement(r, c);
+      old.replaceWith(neu);
+      return neu;
+    }
+
+    function applyDragCell(r, c) {
+      if (!gesture) return;
+      const key = cellKey(r, c);
+      if (gesture.visited.has(key)) return;
+      gesture.visited.add(key);
+      if (applyCellAction(r, c, dragActionForMode())) {
+        ensureGestureHistory();
+        refreshCell(r, c);
+        renderCharList();
+      }
+      els.grid.querySelector(`[data-r="${r}"][data-c="${c}"]`)?.classList.add('drag-over');
+    }
+
+    function bindDocPointerListeners() {
+      document.addEventListener('pointermove', onDocPointerMove);
+      document.addEventListener('pointerup', onDocPointerUp);
+      document.addEventListener('pointercancel', onDocPointerUp);
+    }
+
+    function unbindDocPointerListeners() {
+      document.removeEventListener('pointermove', onDocPointerMove);
+      document.removeEventListener('pointerup', onDocPointerUp);
+      document.removeEventListener('pointercancel', onDocPointerUp);
+    }
+
+    function onGridPointerDown(e) {
+      if (!size) return;
+      if (e.target.closest('.room-edge')) return;
+      if (selectedChar === null && mode !== 'x' && mode !== 'erase' && mode !== 'obstacle') return;
+      if (e.button !== 0) return;
+      const hit = getCellFromElement(e.target);
+      if (!hit) return;
+
+      e.preventDefault();
+
+      gesture = {
+        pointerId: e.pointerId,
+        startR: hit.r,
+        startC: hit.c,
+        startX: e.clientX,
+        startY: e.clientY,
+        cellEl: hit.el,
+        longPressTimer: null,
+        longPressReady: false,
+        isDragging: false,
+        visited: new Set(),
+        historyPushed: false,
+      };
+
+      hit.el.classList.add('pressing');
+      bindDocPointerListeners();
+
+      if (mode === 'pencil') {
+        gesture.longPressTimer = setTimeout(() => {
+          if (!gesture || gesture.isDragging) return;
+          gesture.longPressReady = true;
+          gesture.cellEl?.classList.remove('pressing');
+          gesture.cellEl?.classList.add('long-press-ready');
+        }, LONG_PRESS_MS);
+      }
+    }
+
+    function onDocPointerMove(e) {
+      if (!gesture || gesture.pointerId !== e.pointerId) return;
+      onGridPointerMove(e);
+    }
+
+    function onDocPointerUp(e) {
+      if (!gesture || gesture.pointerId !== e.pointerId) return;
+      onGridPointerUp(e);
+    }
+
+    function onGridPointerMove(e) {
+      if (!gesture || gesture.pointerId !== e.pointerId) return;
+
+      const dx = e.clientX - gesture.startX;
+      const dy = e.clientY - gesture.startY;
+      if (!gesture.isDragging && Math.hypot(dx, dy) >= MOVE_THRESHOLD) {
+        gesture.isDragging = true;
+        if (gesture.longPressTimer) {
+          clearTimeout(gesture.longPressTimer);
+          gesture.longPressTimer = null;
+        }
+        gesture.cellEl?.classList.remove('pressing', 'long-press-ready');
+        applyDragCell(gesture.startR, gesture.startC);
+      }
+
+      if (!gesture.isDragging) return;
+
+      const hit = getCellFromPoint(e.clientX, e.clientY);
+      if (hit) applyDragCell(hit.r, hit.c);
+    }
+
+    function onGridPointerUp(e) {
+      if (!gesture || gesture.pointerId !== e.pointerId) return;
+
+      let changed = false;
+      if (gesture.isDragging) {
+        changed = gesture.historyPushed;
+      } else if (gesture.longPressReady && mode === 'pencil') {
+        if (applyCellAction(gesture.startR, gesture.startC, 'place')) {
+          ensureGestureHistory();
+          changed = true;
+        }
+      } else if (applyCellAction(gesture.startR, gesture.startC, tapActionForMode())) {
+        ensureGestureHistory();
+        changed = true;
+      }
+
+      endGesture();
+      unbindDocPointerListeners();
+      if (changed) {
+        renderGrid();
+        renderCharList();
+      }
+    }
+
+    function onGridPointerCancel(e) {
+      if (!gesture || gesture.pointerId !== e.pointerId) return;
+      endGesture();
+      unbindDocPointerListeners();
+    }
+
+    function onGridContextMenu(e) {
+      if (!size) return;
+      const hit = getCellFromElement(e.target);
+      if (!hit) return;
+      e.preventDefault();
+      endGesture();
+      pushHistory();
+      if (applyCellAction(hit.r, hit.c, 'x-toggle')) {
+        renderGrid();
+      } else {
+        history.pop();
+      }
+    }
+
+    function renderCharList() {
+      els.charList.innerHTML = '';
+      characters.forEach((name, i) => {
+        const btn = document.createElement('button');
+        btn.className = 'char-btn';
+        if (selectedChar === i) btn.classList.add('selected');
+        if (charIsPlaced(i)) btn.classList.add('placed');
+        const label = document.createElement('span');
+        label.className = 'char-label';
+        label.textContent = name;
+        label.style.color = charColor(i);
+        btn.appendChild(label);
+        if (charIsPlaced(i)) {
+          const check = document.createElement('span');
+          check.textContent = ' ✓';
+          btn.appendChild(check);
+        }
+        btn.addEventListener('click', () => {
+          selectCharacter(i);
+        });
+        els.charList.appendChild(btn);
+      });
+    }
+
+    function renderAxisLabels() {
+      els.rowLabels.style.gridTemplateRows = `repeat(${size}, var(--cell-size))`;
+      els.colLabels.style.gridTemplateColumns = `repeat(${size}, var(--cell-size))`;
+      els.rowLabels.innerHTML = '';
+      els.colLabels.innerHTML = '';
+
+      for (let i = 0; i < size; i++) {
+        const rl = document.createElement('div');
+        rl.className = 'axis-label';
+        rl.textContent = i + 1;
+        els.rowLabels.appendChild(rl);
+
+        const cl = document.createElement('div');
+        cl.className = 'axis-label';
+        cl.textContent = i + 1;
+        els.colLabels.appendChild(cl);
+      }
+    }
+
+    function renderGrid() {
+      els.grid.style.gridTemplateColumns = `repeat(${size}, var(--cell-size))`;
+      els.grid.style.gridTemplateRows = `repeat(${size}, var(--cell-size))`;
+      els.grid.innerHTML = '';
+
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          els.grid.appendChild(buildCellElement(r, c));
+        }
+      }
+      renderRoomEdges();
+      updateCellSize();
+    }
+
+    function setMode(next) {
+      mode = next;
+      document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mode === mode);
+      });
+    }
+
+    function selectCharacter(index) {
+      if (index < 0 || index >= characters.length) return false;
+      selectedChar = index;
+      setMode('pencil');
+      renderCharList();
+      return true;
+    }
+
+    function selectByKey(key) {
+      const letter = key.toLowerCase();
+      if (letter === 'x') {
+        setMode('x');
+        return true;
+      }
+      const idx = characters.findIndex(name => name.toLowerCase() === letter);
+      if (idx >= 0) {
+        selectCharacter(idx);
+        return true;
+      }
+      return false;
+    }
+
+    function initGrid() {
+      const n = parseInt(els.size.value, 10);
+      if (Number.isNaN(n) || n < 2 || n > 20) {
+        alert('Grid size must be between 2 and 20.');
+        return;
+      }
+      size = n;
+      characters = parseLabels(els.labels.value, n);
+      board = createEmptyBoard(n);
+      roomEdges = new Set();
+      history = [];
+      selectedChar = 0;
+      mode = 'pencil';
+
+      els.workspace.classList.add('visible');
+      renderAxisLabels();
+      renderCharList();
+      renderGrid();
+      setMode('pencil');
+      requestAnimationFrame(updateCellSize);
+    }
+
+    els.createBtn.addEventListener('click', initGrid);
+    els.undoBtn.addEventListener('click', undo);
+    els.clearBtn.addEventListener('click', () => {
+      if (!confirm('Clear all marks and placements?')) return;
+      pushHistory();
+      for (let r = 0; r < size; r++) {
+        for (let c = 0; c < size; c++) {
+          const cell = board[r][c];
+          cell.confirmed = null;
+          cell.pencil.clear();
+          cell.blocked = false;
+        }
+      }
+      renderGrid();
+      renderCharList();
+    });
+
+    els.grid.addEventListener('pointerdown', onGridPointerDown);
+    els.grid.addEventListener('contextmenu', onGridContextMenu);
+    els.roomEdgesLayer.addEventListener('pointerdown', onWallPointerDown);
+
+    window.addEventListener('resize', updateCellSize);
+    if (typeof ResizeObserver !== 'undefined') {
+      new ResizeObserver(updateCellSize).observe(els.gridWrap);
+    }
+
+    document.querySelectorAll('.tool-btn').forEach(btn => {
+      btn.addEventListener('click', () => setMode(/** @type {ToolMode} */ (btn.dataset.mode)));
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (!size) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        undo();
+        return;
+      }
+
+      if (e.key.length === 1 && /[a-zA-Z]/.test(e.key)) {
+        if (selectByKey(e.key)) {
+          e.preventDefault();
+          return;
+        }
+      }
+
+      if (e.key === 'e') setMode('erase');
+      if (e.key === 'o') setMode('obstacle');
+    });
+  </script>
+</body>
+</html>
