@@ -1,41 +1,22 @@
 # Murdoku Grid Helper
 
-Browser-based grid for solving Murdoku puzzles — pencil marks, long-press to place, room walls, obstacles, and more.
+A simple online grid for solving [Murdoku](https://murdoku.com) puzzles from the book when you want the same marking workflow as the official site.
+
+**Live app:** https://laukim.github.io/murdoku-grid/
+
+## What it does
+
+Set the grid size, then mark up the puzzle as you work through a case:
+
+- **Pencil marks** — click or drag to note which characters could go in a cell
+- **Place a person** — long-press a cell to confirm someone’s position; row and column cross-outs apply automatically
+- **Mark X** — block a whole cell when no one can go there
+- **Obstacles** — mark fixed squares (furniture, etc.) that cannot hold anyone
+- **Room walls** — click or drag internal grid lines to draw bold borders between rooms
+- **Character colors** — A–Z (and V for the victim) each have their own color
+
+Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
 
 ## Run locally
 
-Open `index.html` in your browser, or:
-
-```bash
-python3 -m http.server 8080
-```
-
-Then visit http://localhost:8080
-
-## Host publicly (free)
-
-### Option A — Netlify (easiest)
-
-1. Log in at [app.netlify.com](https://app.netlify.com)
-2. Drag the `murdoku-grid` folder onto [app.netlify.com/drop](https://app.netlify.com/drop)
-3. Netlify gives you a public URL like `https://your-name.netlify.app`
-
-Or from this folder after `netlify login`:
-
-```bash
-chmod +x deploy.sh
-./deploy.sh
-```
-
-### Option B — GitHub Pages
-
-1. Create a new repo on GitHub (e.g. `murdoku-grid`)
-2. Push this folder:
-
-```bash
-git remote add origin git@github.com:laukim/murdoku-grid.git
-git push -u origin main
-```
-
-3. On GitHub: **Settings → Pages → Source: Deploy from branch → `main` / `/ (root)`**
-4. Your site will be at `https://laukim.github.io/murdoku-grid/`
+Open `index.html` in your browser.
