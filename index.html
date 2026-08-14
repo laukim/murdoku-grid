@@ -138,6 +138,45 @@
       opacity: 0.55;
     }
 
+    .map-picker {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.35rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .sidebar-note {
+      font-size: 0.72rem;
+      color: #888;
+      margin: -0.25rem 0 0.5rem;
+    }
+
+    .map-item-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.2rem;
+      padding: 0.4rem 0.25rem;
+      font-size: 0.65rem;
+      color: #555;
+    }
+
+    .map-item-btn.selected {
+      background: #dbeafe;
+      border-color: #2563eb;
+      color: #1e40af;
+    }
+
+    .map-item-btn svg {
+      width: 1.35rem;
+      height: 1.35rem;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.6;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
     .tools {
       display: flex;
       flex-direction: column;
@@ -332,11 +371,58 @@
 
     .cell.obstacle:hover { background: #e5e7eb; }
 
-    .cell.obstacle .obstacle-icon {
-      font-size: calc(var(--cell-size) * 0.45);
-      color: #6b7280;
-      line-height: 1;
+    .cell.furniture-cell {
+      background: #f9fafb;
+    }
+
+    .cell.furniture-cell:hover { background: #f8fafc; }
+
+    .cell .map-feature-underlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+      line-height: 0;
       pointer-events: none;
+      opacity: 0.35;
+    }
+
+    .cell .map-feature-underlay svg,
+    .cell .map-feature-icon svg {
+      width: calc(var(--cell-size) * var(--feature-scale, 0.5));
+      height: calc(var(--cell-size) * var(--feature-scale, 0.5));
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .cell .map-feature-icon {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+      line-height: 0;
+      pointer-events: none;
+    }
+
+    .cell.furniture-cell .map-feature-icon {
+      opacity: 0.55;
+    }
+
+    .cell.obstacle .map-feature-icon {
+      color: #4b5563;
+      opacity: 1;
+    }
+
+    .cell.obstacle .map-feature-icon svg {
+      width: calc(var(--cell-size) * 0.58);
+      height: calc(var(--cell-size) * 0.58);
     }
 
     .cell.user-blocked .x-overlay {
@@ -386,8 +472,12 @@
 
   <div class="setup">
     <div class="field">
-      <label for="size">Grid size</label>
-      <input id="size" type="number" min="2" max="20" value="6">
+      <label for="rows">Rows</label>
+      <input id="rows" type="number" min="2" max="20" value="6">
+    </div>
+    <div class="field">
+      <label for="cols">Columns</label>
+      <input id="cols" type="number" min="2" max="20" value="6">
     </div>
     <div class="field">
       <label for="labels">Character labels (optional)</label>
@@ -401,19 +491,25 @@
       <h2>Characters</h2>
       <div class="char-list" id="charList"></div>
 
+      <h2>Furniture</h2>
+      <p class="sidebar-note">People can be placed here</p>
+      <div class="map-picker" id="furniturePicker"></div>
+
+      <h2>Obstacles</h2>
+      <p class="sidebar-note">Blocks placement</p>
+      <div class="map-picker" id="obstaclePicker"></div>
+
       <h2>Tools</h2>
       <div class="tools">
-        <button class="tool-btn" data-mode="obstacle">Obstacle</button>
         <button class="tool-btn" data-mode="x">Mark X</button>
         <button class="tool-btn" data-mode="erase">Erase</button>
         <button id="undoBtn">Undo</button>
         <button id="clearBtn">Clear all</button>
       </div>
 
-      <p class="hint">Press a letter, then use the grid.<br>
-        Click = pencil mark · Long-press = place · Drag = mark across cells<br>
-      Click internal grid lines to toggle room walls · Drag along walls to paint many<br>
-        <kbd>O</kbd> obstacle · <kbd>A</kbd>–<kbd>Z</kbd> &amp; <kbd>V</kbd> select · <kbd>X</kbd> mark X · Erase clears</p>
+      <p class="hint">Click = pencil · Long-press = place · Drag = mark cells<br>
+        Room walls: click or drag internal lines<br>
+        <kbd>A</kbd>–<kbd>Z</kbd> &amp; <kbd>V</kbd> select · <kbd>O</kbd> map objects · <kbd>X</kbd> mark X</p>
     </aside>
 
     <div class="grid-wrap" id="gridWrap">
@@ -430,7 +526,7 @@
   </div>
 
   <script>
-    /** @typedef {'pencil'|'obstacle'|'x'|'erase'} ToolMode */
+    /** @typedef {'pencil'|'map'|'x'|'erase'} ToolMode */
 
     const LONG_PRESS_MS = 450;
     const MOVE_THRESHOLD = 8;
@@ -442,13 +538,83 @@
       '#5b21b6', '#0e7490',
     ];
 
-    let size = 0;
+    const FURNITURE_ITEMS = [
+      {
+        id: 'chair',
+        label: 'Chair',
+        category: 'furniture',
+        blocksPlacement: false,
+        svg: '<svg viewBox="0 0 24 24"><path d="M7 3h10a2 2 0 0 1 2 2v8H5V5a2 2 0 0 1 2-2z"/><path d="M4 11h16v3H4z"/><path d="M4 11V9"/><path d="M20 11V9"/><path d="M6 14v6"/><path d="M18 14v6"/><path d="M9 14v5"/><path d="M15 14v5"/></svg>',
+      },
+      {
+        id: 'bed',
+        label: 'Bed',
+        category: 'furniture',
+        blocksPlacement: false,
+        svg: '<svg viewBox="0 0 24 24"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>',
+      },
+    ];
+
+    const OBSTACLE_ITEMS = [
+      {
+        id: 'table',
+        label: 'Table',
+        category: 'obstacle',
+        svg: '<svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="2.5" rx="0.5" fill="currentColor" stroke="none"/><line x1="5" y1="11.5" x2="5" y2="19"/><line x1="12" y1="11.5" x2="12" y2="19"/><line x1="19" y1="11.5" x2="19" y2="19"/></svg>',
+      },
+      {
+        id: 'bookshelf',
+        label: 'Shelf',
+        category: 'obstacle',
+        svg: '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="1"/><line x1="5" y1="9" x2="19" y2="9"/><line x1="5" y1="15" x2="19" y2="15"/><rect x="7" y="4.5" width="2.5" height="3.5" fill="currentColor" stroke="none"/><rect x="11" y="5.5" width="2" height="2.5" fill="currentColor" stroke="none"/><rect x="7" y="10.5" width="3" height="3" fill="currentColor" stroke="none"/><rect x="13" y="11" width="2.5" height="2.5" fill="currentColor" stroke="none"/></svg>',
+      },
+      {
+        id: 'plant',
+        label: 'Plant',
+        category: 'obstacle',
+        svg: '<svg viewBox="0 0 24 24"><path d="M8 20h8"/><path d="M12 20v-3"/><path d="M9 17h6l-1-3H10l-1 3z"/><path d="M12 14V8"/><path d="M12 10C9 10 7 7 7 5c3 0 5 2 5 5"/><path d="M12 10c3 0 5-3 5-5-3 0-5 2-5 5"/></svg>',
+      },
+      {
+        id: 'tv',
+        label: 'TV',
+        category: 'obstacle',
+        svg: '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="11" rx="1.5"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="16" x2="12" y2="20"/></svg>',
+      },
+      {
+        id: 'statue',
+        label: 'Statue',
+        category: 'obstacle',
+        svg: '<svg viewBox="0 0 24 24"><circle cx="12" cy="6.5" r="2.2"/><path d="M12 8.5v4"/><path d="M9.5 12.5h5"/><path d="M8 20h8"/><path d="M9 20l1.2-5h3.6L15 20"/><path d="M10.5 12.5l-1.2 3h5.4l-1.2-3"/></svg>',
+      },
+      {
+        id: 'other',
+        label: 'Other',
+        category: 'obstacle',
+        svg: '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" stroke="none"/></svg>',
+      },
+    ];
+
+    const MAP_ITEMS = [...FURNITURE_ITEMS, ...OBSTACLE_ITEMS];
+
+    let rows = 0;
+    let cols = 0;
+
+    function gridReady() {
+      return rows > 0 && cols > 0;
+    }
+
+    function defaultCharCount() {
+      return Math.min(rows, cols);
+    }
+
     /** @type {string[]} */
     let characters = [];
     /** @type {number|null} */
     let selectedChar = null;
     /** @type {ToolMode} */
     let mode = 'pencil';
+    /** @type {string} */
+    let selectedMapItem = FURNITURE_ITEMS[0].id;
 
     /** @type {null | {
      *   pointerId: number,
@@ -481,9 +647,9 @@
      * - confirmed: character index placed here, or null
      * - pencil: Set of char indices marked as candidates
      * - blocked: user-marked X — no one can be placed here
-     * - obstacle: fixed obstacle — nothing can be placed here
+     * - feature: map item id (furniture or obstacle), or null
      */
-    /** @type {{ confirmed: (number|null)[], pencil: Set<number>[], blocked: boolean, obstacle: boolean }[]} */
+    /** @type {{ confirmed: (number|null)[], pencil: Set<number>[], blocked: boolean, feature: string|null }[]} */
     let board = [];
     /** @type {typeof board[]} */
     let history = [];
@@ -491,12 +657,15 @@
     let roomEdges = new Set();
 
     const els = {
-      size: document.getElementById('size'),
+      rows: document.getElementById('rows'),
+      cols: document.getElementById('cols'),
       labels: document.getElementById('labels'),
       createBtn: document.getElementById('createBtn'),
       workspace: document.getElementById('workspace'),
       gridWrap: document.getElementById('gridWrap'),
       charList: document.getElementById('charList'),
+      furniturePicker: document.getElementById('furniturePicker'),
+      obstaclePicker: document.getElementById('obstaclePicker'),
       grid: document.getElementById('grid'),
       gridStack: document.getElementById('gridStack'),
       roomEdgesLayer: document.getElementById('roomEdges'),
@@ -524,7 +693,7 @@
           confirmed: cell.confirmed,
           pencil: new Set(cell.pencil),
           blocked: cell.blocked,
-          obstacle: cell.obstacle,
+          feature: cell.feature,
         }))
       );
     }
@@ -551,6 +720,47 @@
       return CHAR_COLORS[i % CHAR_COLORS.length];
     }
 
+    function getMapItem(id) {
+      return MAP_ITEMS.find(t => t.id === id) || MAP_ITEMS[0];
+    }
+
+    function mapItemBlocks(id) {
+      return getMapItem(id).blocksPlacement !== false;
+    }
+
+    function appendMapItemIcon(div, itemId, underlay = false) {
+      const item = getMapItem(itemId);
+      const icon = document.createElement('span');
+      icon.className = underlay ? 'map-feature-underlay' : 'map-feature-icon';
+      if (item.gridScale) icon.style.setProperty('--feature-scale', String(item.gridScale));
+      icon.innerHTML = item.svg;
+      icon.title = item.label;
+      div.appendChild(icon);
+    }
+
+    function renderMapPicker(container, items) {
+      container.innerHTML = '';
+      items.forEach(type => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'map-item-btn';
+        if (mode === 'map' && selectedMapItem === type.id) btn.classList.add('selected');
+        btn.title = type.label;
+        btn.innerHTML = `${type.svg}<span>${type.label}</span>`;
+        btn.addEventListener('click', () => {
+          selectedMapItem = type.id;
+          setMode('map');
+          renderMapPickers();
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function renderMapPickers() {
+      renderMapPicker(els.furniturePicker, FURNITURE_ITEMS);
+      renderMapPicker(els.obstaclePicker, OBSTACLE_ITEMS);
+    }
+
     function defaultLabels(n) {
       const labels = [];
       for (let i = 0; i < n - 1; i++) {
@@ -573,20 +783,20 @@
       return parts;
     }
 
-    function createEmptyBoard(n) {
-      return Array.from({ length: n }, () =>
-        Array.from({ length: n }, () => ({
+    function createEmptyBoard(numRows, numCols) {
+      return Array.from({ length: numRows }, () =>
+        Array.from({ length: numCols }, () => ({
           confirmed: null,
           pencil: new Set(),
           blocked: false,
-          obstacle: false,
+          feature: null,
         }))
       );
     }
 
     function charIsPlaced(ci) {
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
           if (board[r][c].confirmed === ci) return true;
         }
       }
@@ -598,17 +808,19 @@
     }
 
     function isRowColBlocked(r, c) {
-      for (let j = 0; j < size; j++) {
+      for (let j = 0; j < cols; j++) {
         if (j !== c && board[r][j].confirmed !== null) return true;
       }
-      for (let i = 0; i < size; i++) {
+      for (let i = 0; i < rows; i++) {
         if (i !== r && board[i][c].confirmed !== null) return true;
       }
       return false;
     }
 
     function cellIsUnavailable(r, c) {
-      return board[r][c].obstacle || board[r][c].blocked || isRowColBlocked(r, c);
+      const cell = board[r][c];
+      if (cell.feature != null && mapItemBlocks(cell.feature)) return true;
+      return cell.blocked || isRowColBlocked(r, c);
     }
 
     function clearCellMarks(r, c) {
@@ -618,19 +830,24 @@
       cell.blocked = false;
     }
 
+    let cellSizeLock = false;
+
     function updateCellSize() {
-      if (!size || !els.workspace.classList.contains('visible')) return;
+      if (cellSizeLock) return;
+      if (!gridReady() || !els.workspace.classList.contains('visible')) return;
       const padding = 12;
       const border = 4;
       const gapPx = parseFloat(getComputedStyle(els.gridWrap).fontSize) * 0.35;
       const axisH = els.colLabels.offsetHeight || 22;
       const availW = els.gridWrap.clientWidth - padding;
       const availH = window.innerHeight - els.gridWrap.getBoundingClientRect().top - axisH - gapPx - padding;
-      const cellFromW = Math.floor((availW - gapPx - border) / (size + 1));
-      const cellFromH = Math.floor((availH - gapPx - border) / size);
+      const cellFromW = Math.floor((availW - gapPx - border) / (cols + 1));
+      const cellFromH = Math.floor((availH - gapPx - border) / rows);
       let cell = Math.min(cellFromW, cellFromH);
       cell = Math.max(28, Math.min(cell, 160));
-      els.gridWrap.style.setProperty('--cell-size', `${cell}px`);
+      const next = `${cell}px`;
+      if (els.gridWrap.style.getPropertyValue('--cell-size') === next) return;
+      els.gridWrap.style.setProperty('--cell-size', next);
     }
 
     function applyPlacement(ci, r, c) {
@@ -638,15 +855,15 @@
       board[r][c].pencil.clear();
       board[r][c].blocked = false;
 
-      for (let i = 0; i < size; i++) {
-        for (let j = 0; j < size; j++) {
+      for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols; j++) {
           if (i === r && j === c) continue;
           board[i][j].pencil.delete(ci);
           if (board[i][j].confirmed === ci) board[i][j].confirmed = null;
         }
       }
 
-      for (let j = 0; j < size; j++) {
+      for (let j = 0; j < cols; j++) {
         if (j === c) continue;
         const cell = board[r][j];
         if (cell.confirmed !== null && cell.confirmed !== ci) {
@@ -654,7 +871,7 @@
         }
         cell.pencil.clear();
       }
-      for (let i = 0; i < size; i++) {
+      for (let i = 0; i < rows; i++) {
         if (i === r) continue;
         const cell = board[i][c];
         if (cell.confirmed !== null && cell.confirmed !== ci) {
@@ -681,7 +898,7 @@
       const cell = board[r][c];
 
       if (action === 'x-toggle') {
-        if (cell.obstacle || cell.confirmed !== null) return false;
+        if ((cell.feature != null && mapItemBlocks(cell.feature)) || cell.confirmed !== null) return false;
         if (cell.blocked) {
           cell.blocked = false;
           return true;
@@ -692,49 +909,42 @@
       }
 
       if (action === 'x-add') {
-        if (cell.obstacle || cell.confirmed !== null || cell.blocked) return false;
+        if ((cell.feature != null && mapItemBlocks(cell.feature)) || cell.confirmed !== null || cell.blocked) return false;
         cell.pencil.clear();
         cell.blocked = true;
         return true;
       }
 
       if (action === 'erase') {
-        if (cell.obstacle) {
-          cell.obstacle = false;
-          return true;
-        }
-        if (cell.blocked) {
-          cell.blocked = false;
-          return true;
-        }
-        if (selectedChar === null) return false;
-        const ci = selectedChar;
-        if (cell.confirmed === ci) {
+        let changed = false;
+        if (cell.confirmed !== null) {
           removePlacement(r, c);
-          return true;
+          changed = true;
         }
-        const had = cell.pencil.has(ci);
-        cell.pencil.delete(ci);
-        return had;
+        if (cell.pencil.size > 0) {
+          cell.pencil.clear();
+          changed = true;
+        }
+        return changed;
       }
 
       if (selectedChar === null) return false;
       const ci = selectedChar;
 
-      if (action === 'obstacle-toggle') {
-        if (cell.obstacle) {
-          cell.obstacle = false;
+      if (action === 'map-toggle') {
+        if (cell.feature === selectedMapItem) {
+          cell.feature = null;
           return true;
         }
-        clearCellMarks(r, c);
-        cell.obstacle = true;
+        if (mapItemBlocks(selectedMapItem)) clearCellMarks(r, c);
+        cell.feature = selectedMapItem;
         return true;
       }
 
-      if (action === 'obstacle-add') {
-        if (cell.obstacle) return false;
-        clearCellMarks(r, c);
-        cell.obstacle = true;
+      if (action === 'map-add') {
+        if (cell.feature === selectedMapItem) return false;
+        if (mapItemBlocks(selectedMapItem)) clearCellMarks(r, c);
+        cell.feature = selectedMapItem;
         return true;
       }
 
@@ -770,14 +980,14 @@
     }
 
     function dragActionForMode() {
-      if (mode === 'obstacle') return 'obstacle-add';
+      if (mode === 'map') return 'map-add';
       if (mode === 'x') return 'x-add';
       if (mode === 'erase') return 'erase';
       return 'pencil-add';
     }
 
     function tapActionForMode() {
-      if (mode === 'obstacle') return 'obstacle-toggle';
+      if (mode === 'map') return 'map-toggle';
       if (mode === 'x') return 'x-toggle';
       if (mode === 'erase') return 'erase';
       return 'pencil-toggle';
@@ -821,9 +1031,9 @@
 
     function applyRoomWallClasses(div, r, c) {
       if (r > 0 && roomEdges.has(`h,${r - 1},${c}`)) div.classList.add('wall-top');
-      if (r < size - 1 && roomEdges.has(`h,${r},${c}`)) div.classList.add('wall-bottom');
+      if (r < rows - 1 && roomEdges.has(`h,${r},${c}`)) div.classList.add('wall-bottom');
       if (c > 0 && roomEdges.has(`v,${r},${c - 1}`)) div.classList.add('wall-left');
-      if (c < size - 1 && roomEdges.has(`v,${r},${c}`)) div.classList.add('wall-right');
+      if (c < cols - 1 && roomEdges.has(`v,${r},${c}`)) div.classList.add('wall-right');
     }
 
     function setRoomEdge(key, bold) {
@@ -882,17 +1092,17 @@
     /** Pick closest wall edge at a point (for click / drag start). */
     function pickRoomEdgeAtPoint(x, y) {
       const { relX, relY, cell } = getGridInnerCoords(x, y);
-      if (!cell || !size) return null;
+      if (!cell || !gridReady()) return null;
 
       const halfHit = WALL_HIT / 2;
       let bestKey = null;
       let bestDist = halfHit + 1;
 
-      for (let r = 0; r < size - 1; r++) {
+      for (let r = 0; r < rows - 1; r++) {
         const dist = Math.abs(relY - (r + 1) * cell);
         if (dist > halfHit) continue;
         const c = Math.floor(relX / cell);
-        if (c < 0 || c >= size) continue;
+        if (c < 0 || c >= cols) continue;
         const key = `h,${r},${c}`;
         if (dist < bestDist - 0.001 || (Math.abs(dist - bestDist) < 0.001 && bestKey?.startsWith('v'))) {
           bestDist = dist;
@@ -900,11 +1110,11 @@
         }
       }
 
-      for (let c = 0; c < size - 1; c++) {
+      for (let c = 0; c < cols - 1; c++) {
         const dist = Math.abs(relX - (c + 1) * cell);
         if (dist > halfHit) continue;
         const r = Math.floor(relY / cell);
-        if (r < 0 || r >= size) continue;
+        if (r < 0 || r >= rows) continue;
         const key = `v,${r},${c}`;
         if (dist < bestDist - 0.001) {
           bestDist = dist;
@@ -917,22 +1127,22 @@
 
     /** During drag, stay on the same row (h) or column (v) as the stroke started. */
     function getRoomEdgeAlongDrag(x, y) {
-      if (!wallGesture || !size) return null;
+      if (!wallGesture || !gridReady()) return null;
       const { relX, relY, cell } = getGridInnerCoords(x, y);
       if (!cell) return null;
 
       if (wallGesture.edgeType === 'h') {
         const r = wallGesture.fixedIndex;
-        if (r < 0 || r >= size - 1) return null;
+        if (r < 0 || r >= rows - 1) return null;
         const c = Math.floor(relX / cell);
-        if (c < 0 || c >= size) return null;
+        if (c < 0 || c >= cols) return null;
         return `h,${r},${c}`;
       }
 
       const c = wallGesture.fixedIndex;
-      if (c < 0 || c >= size - 1) return null;
+      if (c < 0 || c >= cols - 1) return null;
       const r = Math.floor(relY / cell);
-      if (r < 0 || r >= size) return null;
+      if (r < 0 || r >= rows) return null;
       return `v,${r},${c}`;
     }
 
@@ -964,7 +1174,7 @@
     }
 
     function onWallPointerDown(e) {
-      if (!size || e.button !== 0) return;
+      if (!gridReady() || e.button !== 0) return;
       const key = pickRoomEdgeAtPoint(e.clientX, e.clientY);
       if (!key) return;
 
@@ -1001,14 +1211,14 @@
 
     function renderRoomEdges() {
       els.roomEdgesLayer.innerHTML = '';
-      if (!size) return;
+      if (!gridReady()) return;
 
       const cs = 'var(--cell-size)';
       const hit = WALL_HIT;
       const inset = hit / 2;
 
-      for (let r = 0; r < size - 1; r++) {
-        for (let c = 0; c < size; c++) {
+      for (let r = 0; r < rows - 1; r++) {
+        for (let c = 0; c < cols; c++) {
           const key = `h,${r},${c}`;
           const div = document.createElement('div');
           div.className = 'room-edge room-edge-h' + (roomEdges.has(key) ? ' bold' : '');
@@ -1022,8 +1232,8 @@
         }
       }
 
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size - 1; c++) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols - 1; c++) {
           const key = `v,${r},${c}`;
           const div = document.createElement('div');
           div.className = 'room-edge room-edge-v' + (roomEdges.has(key) ? ' bold' : '');
@@ -1046,16 +1256,19 @@
       div.dataset.c = String(c);
       applyRoomWallClasses(div, r, c);
 
-      if (cell.obstacle) {
+      const isFurniture = cell.feature != null && !mapItemBlocks(cell.feature);
+      const isBlocking = cell.feature != null && mapItemBlocks(cell.feature);
+
+      if (isBlocking) {
         div.classList.add('obstacle');
-        const icon = document.createElement('span');
-        icon.className = 'obstacle-icon';
-        icon.textContent = '▪';
-        div.appendChild(icon);
+        appendMapItemIcon(div, cell.feature);
         return div;
       }
 
+      if (isFurniture) div.classList.add('furniture-cell');
+
       if (cell.confirmed !== null) {
+        if (isFurniture) appendMapItemIcon(div, cell.feature, true);
         div.classList.add('has-confirmed');
         const span = document.createElement('span');
         span.className = 'confirmed';
@@ -1063,6 +1276,7 @@
         span.style.color = charColor(cell.confirmed);
         div.appendChild(span);
       } else if (cell.blocked || isRowColBlocked(r, c)) {
+        if (isFurniture) appendMapItemIcon(div, cell.feature, true);
         if (cell.blocked) div.classList.add('user-blocked');
         if (isRowColBlocked(r, c)) div.classList.add('row-col-blocked');
         const x = document.createElement('span');
@@ -1070,23 +1284,28 @@
         x.textContent = '×';
         div.appendChild(x);
       } else if (cell.pencil.size > 0) {
+        if (isFurniture) appendMapItemIcon(div, cell.feature, true);
         const marks = document.createElement('div');
         marks.className = 'marks';
-        const markCols = Math.ceil(Math.sqrt(size));
-        const markRows = Math.ceil(size / markCols);
+        const n = characters.length;
+        const markCols = Math.ceil(Math.sqrt(n));
+        const markRows = Math.ceil(n / markCols);
         marks.style.gridTemplateColumns = `repeat(${markCols}, 1fr)`;
         marks.style.gridTemplateRows = `repeat(${markRows}, 1fr)`;
         for (let s = 0; s < markCols * markRows; s++) {
           const m = document.createElement('span');
           m.className = 'mark';
-          if (s < size && cell.pencil.has(s)) {
+          if (s < n && cell.pencil.has(s)) {
             m.textContent = characters[s];
             m.style.color = charColor(s);
           }
           marks.appendChild(m);
         }
         div.appendChild(marks);
+      } else if (isFurniture) {
+        appendMapItemIcon(div, cell.feature);
       }
+
       return div;
     }
 
@@ -1096,6 +1315,14 @@
       const neu = buildCellElement(r, c);
       old.replaceWith(neu);
       return neu;
+    }
+
+    function refreshAllCells() {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          refreshCell(r, c);
+        }
+      }
     }
 
     function applyDragCell(r, c) {
@@ -1124,9 +1351,9 @@
     }
 
     function onGridPointerDown(e) {
-      if (!size) return;
+      if (!gridReady()) return;
       if (e.target.closest('.room-edge')) return;
-      if (selectedChar === null && mode !== 'x' && mode !== 'erase' && mode !== 'obstacle') return;
+      if (selectedChar === null && mode !== 'x' && mode !== 'erase' && mode !== 'map') return;
       if (e.button !== 0) return;
       const hit = getCellFromElement(e.target);
       if (!hit) return;
@@ -1210,7 +1437,7 @@
       endGesture();
       unbindDocPointerListeners();
       if (changed) {
-        renderGrid();
+        refreshAllCells();
         renderCharList();
       }
     }
@@ -1222,14 +1449,14 @@
     }
 
     function onGridContextMenu(e) {
-      if (!size) return;
+      if (!gridReady()) return;
       const hit = getCellFromElement(e.target);
       if (!hit) return;
       e.preventDefault();
       endGesture();
       pushHistory();
       if (applyCellAction(hit.r, hit.c, 'x-toggle')) {
-        renderGrid();
+        refreshAllCells();
       } else {
         history.pop();
       }
@@ -1260,17 +1487,19 @@
     }
 
     function renderAxisLabels() {
-      els.rowLabels.style.gridTemplateRows = `repeat(${size}, var(--cell-size))`;
-      els.colLabels.style.gridTemplateColumns = `repeat(${size}, var(--cell-size))`;
+      els.rowLabels.style.gridTemplateRows = `repeat(${rows}, var(--cell-size))`;
+      els.colLabels.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
       els.rowLabels.innerHTML = '';
       els.colLabels.innerHTML = '';
 
-      for (let i = 0; i < size; i++) {
+      for (let i = 0; i < rows; i++) {
         const rl = document.createElement('div');
         rl.className = 'axis-label';
         rl.textContent = i + 1;
         els.rowLabels.appendChild(rl);
+      }
 
+      for (let i = 0; i < cols; i++) {
         const cl = document.createElement('div');
         cl.className = 'axis-label';
         cl.textContent = i + 1;
@@ -1279,17 +1508,18 @@
     }
 
     function renderGrid() {
-      els.grid.style.gridTemplateColumns = `repeat(${size}, var(--cell-size))`;
-      els.grid.style.gridTemplateRows = `repeat(${size}, var(--cell-size))`;
+      cellSizeLock = true;
+      els.grid.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
+      els.grid.style.gridTemplateRows = `repeat(${rows}, var(--cell-size))`;
       els.grid.innerHTML = '';
 
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
           els.grid.appendChild(buildCellElement(r, c));
         }
       }
       renderRoomEdges();
-      updateCellSize();
+      cellSizeLock = false;
     }
 
     function setMode(next) {
@@ -1297,6 +1527,7 @@
       document.querySelectorAll('.tool-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.mode === mode);
       });
+      renderMapPickers();
     }
 
     function selectCharacter(index) {
@@ -1322,14 +1553,16 @@
     }
 
     function initGrid() {
-      const n = parseInt(els.size.value, 10);
-      if (Number.isNaN(n) || n < 2 || n > 20) {
-        alert('Grid size must be between 2 and 20.');
+      const numRows = parseInt(els.rows.value, 10);
+      const numCols = parseInt(els.cols.value, 10);
+      if (Number.isNaN(numRows) || Number.isNaN(numCols) || numRows < 2 || numRows > 20 || numCols < 2 || numCols > 20) {
+        alert('Rows and columns must each be between 2 and 20.');
         return;
       }
-      size = n;
-      characters = parseLabels(els.labels.value, n);
-      board = createEmptyBoard(n);
+      rows = numRows;
+      cols = numCols;
+      characters = parseLabels(els.labels.value, defaultCharCount());
+      board = createEmptyBoard(rows, cols);
       roomEdges = new Set();
       history = [];
       selectedChar = 0;
@@ -1338,6 +1571,7 @@
       els.workspace.classList.add('visible');
       renderAxisLabels();
       renderCharList();
+      renderMapPickers();
       renderGrid();
       setMode('pencil');
       requestAnimationFrame(updateCellSize);
@@ -1348,8 +1582,8 @@
     els.clearBtn.addEventListener('click', () => {
       if (!confirm('Clear all marks and placements?')) return;
       pushHistory();
-      for (let r = 0; r < size; r++) {
-        for (let c = 0; c < size; c++) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
           const cell = board[r][c];
           cell.confirmed = null;
           cell.pencil.clear();
@@ -1373,8 +1607,10 @@
       btn.addEventListener('click', () => setMode(/** @type {ToolMode} */ (btn.dataset.mode)));
     });
 
+    renderMapPickers();
+
     document.addEventListener('keydown', (e) => {
-      if (!size) return;
+      if (!gridReady()) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
       if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
@@ -1391,7 +1627,14 @@
       }
 
       if (e.key === 'e') setMode('erase');
-      if (e.key === 'o') setMode('obstacle');
+      if (e.key === 'o') setMode('map');
+      if (e.key >= '1' && e.key <= '9' && mode === 'map') {
+        const idx = parseInt(e.key, 10) - 1;
+        if (idx < MAP_ITEMS.length) {
+          selectedMapItem = MAP_ITEMS[idx].id;
+          renderMapPickers();
+        }
+      }
     });
   </script>
 </body>
