@@ -317,11 +317,15 @@
     .cell.drag-over { background: #eff6ff; }
 
     .cell .confirmed {
+      position: relative;
+      z-index: 2;
       font-size: calc(var(--cell-size) * 0.38);
       font-weight: 700;
     }
 
     .cell .marks {
+      position: relative;
+      z-index: 2;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       grid-template-rows: repeat(3, 1fr);
@@ -362,6 +366,7 @@
       pointer-events: none;
       font-weight: 300;
       line-height: 1;
+      z-index: 2;
     }
 
     .cell.obstacle {
@@ -377,6 +382,18 @@
 
     .cell.furniture-cell:hover { background: #f8fafc; }
 
+    .cell.carpet-cell {
+      background: #efe6d8;
+    }
+
+    .cell.carpet-cell:hover { background: #ebe0cf; }
+
+    .cell.car-cell {
+      background: #eef2f7;
+    }
+
+    .cell.car-cell:hover { background: #e8edf4; }
+
     .cell .map-feature-underlay {
       position: absolute;
       inset: 0;
@@ -387,6 +404,7 @@
       line-height: 0;
       pointer-events: none;
       opacity: 0.35;
+      z-index: 1;
     }
 
     .cell .map-feature-underlay svg,
@@ -409,20 +427,72 @@
       color: #9ca3af;
       line-height: 0;
       pointer-events: none;
+      z-index: 1;
     }
 
-    .cell.furniture-cell .map-feature-icon {
+    .cell .map-feature-stretch {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #9ca3af;
+      line-height: 0;
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    .cell .map-feature-stretch svg {
+      width: 88%;
+      height: 88%;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .cell .map-feature-stretch.is-underlay {
+      opacity: 0.28;
+    }
+
+    .cell.furniture-cell .map-feature-icon,
+    .cell.furniture-cell .map-feature-stretch {
       opacity: 0.55;
     }
 
-    .cell.obstacle .map-feature-icon {
+    .cell.carpet-cell .map-feature-icon,
+    .cell.carpet-cell .map-feature-stretch {
+      color: #a68a5b;
+      opacity: 0.7;
+    }
+
+    .cell.carpet-cell .map-feature-underlay {
+      color: #a68a5b;
+      opacity: 0.28;
+    }
+
+    .cell.car-cell .map-feature-icon,
+    .cell.car-cell .map-feature-stretch {
+      color: #64748b;
+      opacity: 0.72;
+    }
+
+    .cell.car-cell .map-feature-underlay {
+      color: #64748b;
+      opacity: 0.3;
+    }
+
+    .cell.obstacle .map-feature-icon,
+    .cell.obstacle .map-feature-stretch {
       color: #4b5563;
       opacity: 1;
     }
 
-    .cell.obstacle .map-feature-icon svg {
-      width: calc(var(--cell-size) * 0.58);
-      height: calc(var(--cell-size) * 0.58);
+    .cell.obstacle .map-feature-icon svg,
+    .cell.obstacle .map-feature-stretch svg {
+      width: calc(var(--cell-size) * 0.72);
+      height: calc(var(--cell-size) * 0.72);
     }
 
     .cell.user-blocked .x-overlay {
@@ -551,7 +621,24 @@
         label: 'Bed',
         category: 'furniture',
         blocksPlacement: false,
-        svg: '<svg viewBox="0 0 24 24"><path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/></svg>',
+        stretchable: true,
+        svg: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="6" y="6" width="12" height="5" rx="1"/></svg>',
+      },
+      {
+        id: 'carpet',
+        label: 'Carpet',
+        category: 'furniture',
+        blocksPlacement: false,
+        stretchable: true,
+        svg: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M7 7h10v10H7z"/><path d="M7 12h10"/><path d="M12 7v10"/></svg>',
+      },
+      {
+        id: 'car',
+        label: 'Car',
+        category: 'furniture',
+        blocksPlacement: false,
+        stretchable: true,
+        svg: '<svg viewBox="0 0 24 24"><rect x="4" y="8" width="16" height="8" rx="2.5"/><rect x="6" y="8.5" width="7" height="5.5" rx="1"/><circle cx="7" cy="17.5" r="1.5" fill="currentColor" stroke="none"/><circle cx="17" cy="17.5" r="1.5" fill="currentColor" stroke="none"/></svg>',
       },
     ];
 
@@ -560,7 +647,8 @@
         id: 'table',
         label: 'Table',
         category: 'obstacle',
-        svg: '<svg viewBox="0 0 24 24"><rect x="3" y="9" width="18" height="2.5" rx="0.5" fill="currentColor" stroke="none"/><line x1="5" y1="11.5" x2="5" y2="19"/><line x1="12" y1="11.5" x2="12" y2="19"/><line x1="19" y1="11.5" x2="19" y2="19"/></svg>',
+        stretchable: true,
+        svg: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><circle cx="12" cy="12" r="3.2"/></svg>',
       },
       {
         id: 'bookshelf',
@@ -626,6 +714,7 @@
      *   isDragging: boolean,
      *   visited: Set<string>,
      *   historyPushed: boolean,
+     *   pencilDragRemove: boolean,
      * }} */
     let gesture = null;
 
@@ -728,12 +817,141 @@
       return getMapItem(id).blocksPlacement !== false;
     }
 
-    function appendMapItemIcon(div, itemId, underlay = false) {
+    function featureNeighbors(r, c, id) {
+      const horizontalOnly = id === 'car';
+      return {
+        left: c > 0 && board[r][c - 1].feature === id && !roomEdges.has(`v,${r},${c - 1}`),
+        right: c < cols - 1 && board[r][c + 1].feature === id && !roomEdges.has(`v,${r},${c}`),
+        up: !horizontalOnly && r > 0 && board[r - 1][c].feature === id && !roomEdges.has(`h,${r - 1},${c}`),
+        down: !horizontalOnly && r < rows - 1 && board[r + 1][c].feature === id && !roomEdges.has(`h,${r},${c}`),
+      };
+    }
+
+    function tableSvg(n) {
+      const inset = 3;
+      const x0 = n.left ? 0 : inset;
+      const y0 = n.up ? 0 : inset;
+      const x1 = n.right ? 24 : 24 - inset;
+      const y1 = n.down ? 24 : 24 - inset;
+      const connected = n.left || n.right || n.up || n.down;
+      const rx = connected ? 0 : 1.5;
+
+      // Top-down slab: fill only; borders drawn on exposed edges so groups join cleanly.
+      const parts = [
+        `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="${rx}" fill="currentColor" fill-opacity="0.28" stroke="none"/>`,
+      ];
+      if (!n.left && !n.up) {
+        parts.push('<circle cx="12" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/>');
+      }
+      if (!n.up) parts.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="currentColor" stroke-width="1.7"/>`);
+      if (!n.down) parts.push(`<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="currentColor" stroke-width="1.7"/>`);
+      if (!n.left) parts.push(`<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="currentColor" stroke-width="1.7"/>`);
+      if (!n.right) parts.push(`<line x1="${x1}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="currentColor" stroke-width="1.7"/>`);
+
+      return `<svg viewBox="0 0 24 24">${parts.join('')}</svg>`;
+    }
+
+    function bedSvg(n) {
+      const inset = 3;
+      const x0 = n.left ? 0 : inset;
+      const y0 = n.up ? 0 : inset;
+      const x1 = n.right ? 24 : 24 - inset;
+      const y1 = n.down ? 24 : 24 - inset;
+      const connected = n.left || n.right || n.up || n.down;
+      const rx = connected ? 0 : 1.5;
+      const hRun = (n.left || n.right) && !n.up && !n.down;
+      const vRun = (n.up || n.down) && !n.left && !n.right;
+
+      const parts = [
+        `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="${rx}" fill="currentColor" fill-opacity="0.2" stroke="none"/>`,
+      ];
+
+      // Pillow at the head of a typical 2-cell bed (left for horizontal, top for vertical).
+      if (hRun && !n.left) {
+        parts.push(`<rect x="${x0 + 2.2}" y="${y0 + 3.5}" width="6.5" height="${y1 - y0 - 7}" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>`);
+      } else if (vRun && !n.up) {
+        parts.push(`<rect x="${x0 + 3.5}" y="${y0 + 2.2}" width="${x1 - x0 - 7}" height="6.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.5"/>`);
+      } else if (!n.left && !n.up) {
+        parts.push('<rect x="7" y="6.5" width="10" height="5" rx="1"/>');
+      }
+
+      if (!n.up) parts.push(`<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}" stroke="currentColor" stroke-width="1.7"/>`);
+      if (!n.down) parts.push(`<line x1="${x0}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="currentColor" stroke-width="1.7"/>`);
+      if (!n.left) parts.push(`<line x1="${x0}" y1="${y0}" x2="${x0}" y2="${y1}" stroke="currentColor" stroke-width="1.7"/>`);
+      if (!n.right) parts.push(`<line x1="${x1}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="currentColor" stroke-width="1.7"/>`);
+
+      return `<svg viewBox="0 0 24 24">${parts.join('')}</svg>`;
+    }
+
+    function carSvg(n) {
+      const top = 8;
+      const bottom = 16;
+      const wheelY = 17.5;
+      const x0 = n.left ? 0 : 4;
+      const x1 = n.right ? 24 : 20;
+      const joined = n.left || n.right;
+      const bodyX = x0 + (n.left ? 0 : 0.5);
+      const bodyW = x1 - x0 - (n.left ? 0 : 0.5) - (n.right ? 0 : 0.5);
+      const rx = joined ? 0 : 2.5;
+
+      const parts = [
+        `<rect x="${bodyX}" y="${top}" width="${bodyW}" height="${bottom - top}" rx="${rx}" fill="currentColor" fill-opacity="0.22" stroke="currentColor" stroke-width="1.5"/>`,
+      ];
+
+      if (!n.left) {
+        parts.push(`<rect x="${x0 + 2}" y="${top + 0.5}" width="7" height="5.5" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/>`);
+        parts.push(`<circle cx="${x0 + 3.5}" cy="${wheelY}" r="1.5" fill="currentColor" stroke="none"/>`);
+      }
+      if (!n.right) {
+        parts.push(`<circle cx="${x1 - 3.5}" cy="${wheelY}" r="1.5" fill="currentColor" stroke="none"/>`);
+      }
+
+      return `<svg viewBox="0 0 24 24">${parts.join('')}</svg>`;
+    }
+
+    function carpetSvg(n) {
+      const x0 = n.left ? 0 : 3;
+      const y0 = n.up ? 0 : 3;
+      const x1 = n.right ? 24 : 21;
+      const y1 = n.down ? 24 : 21;
+      const parts = [
+        `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" rx="${n.left || n.right || n.up || n.down ? 0 : 1.5}"/>`,
+      ];
+      if (!n.left && !n.right && !n.up && !n.down) {
+        parts.push('<rect x="7" y="7" width="10" height="10" rx="1"/>');
+        parts.push('<path d="M7 12h10"/><path d="M12 7v10"/>');
+      } else {
+        if (!n.up) parts.push(`<path d="M${x0} ${y0 + 3}h${x1 - x0}"/>`);
+        if (!n.down) parts.push(`<path d="M${x0} ${y1 - 3}h${x1 - x0}"/>`);
+        if (!n.left) parts.push(`<path d="M${x0 + 3} ${y0}v${y1 - y0}"/>`);
+        if (!n.right) parts.push(`<path d="M${x1 - 3} ${y0}v${y1 - y0}"/>`);
+      }
+      return `<svg viewBox="0 0 24 24">${parts.join('')}</svg>`;
+    }
+
+    function stretchSvgForCell(itemId, neighbors) {
+      if (itemId === 'table') return tableSvg(neighbors);
+      if (itemId === 'bed') return bedSvg(neighbors);
+      if (itemId === 'car') return carSvg(neighbors);
+      if (itemId === 'carpet') return carpetSvg(neighbors);
+      return getMapItem(itemId).svg;
+    }
+
+    function appendMapItemIcon(div, itemId, underlay = false, cellR = null, cellC = null) {
       const item = getMapItem(itemId);
       const icon = document.createElement('span');
-      icon.className = underlay ? 'map-feature-underlay' : 'map-feature-icon';
-      if (item.gridScale) icon.style.setProperty('--feature-scale', String(item.gridScale));
-      icon.innerHTML = item.svg;
+      const stretchable = item.stretchable && cellR != null && cellC != null;
+
+      if (stretchable) {
+        const neighbors = featureNeighbors(cellR, cellC, itemId);
+        icon.className = 'map-feature-stretch' + (underlay ? ' is-underlay' : '');
+        icon.innerHTML = stretchSvgForCell(itemId, neighbors);
+      } else {
+        icon.className = underlay ? 'map-feature-underlay' : 'map-feature-icon';
+        if (item.gridScale) icon.style.setProperty('--feature-scale', String(item.gridScale));
+        icon.innerHTML = item.svg;
+      }
+
       icon.title = item.label;
       div.appendChild(icon);
     }
@@ -830,10 +1048,11 @@
       cell.blocked = false;
     }
 
-    let cellSizeLock = false;
+    let layoutLock = false;
+    let cellSizeRaf = 0;
 
     function updateCellSize() {
-      if (cellSizeLock) return;
+      if (layoutLock) return;
       if (!gridReady() || !els.workspace.classList.contains('visible')) return;
       const padding = 12;
       const border = 4;
@@ -848,6 +1067,14 @@
       const next = `${cell}px`;
       if (els.gridWrap.style.getPropertyValue('--cell-size') === next) return;
       els.gridWrap.style.setProperty('--cell-size', next);
+    }
+
+    function scheduleCellSizeUpdate() {
+      if (cellSizeRaf) return;
+      cellSizeRaf = requestAnimationFrame(() => {
+        cellSizeRaf = 0;
+        updateCellSize();
+      });
     }
 
     function applyPlacement(ci, r, c) {
@@ -966,6 +1193,12 @@
         return true;
       }
 
+      if (action === 'pencil-remove') {
+        if (!cell.pencil.has(ci)) return false;
+        cell.pencil.delete(ci);
+        return true;
+      }
+
       if (action === 'place') {
         if (cell.confirmed === ci) {
           removePlacement(r, c);
@@ -983,6 +1216,7 @@
       if (mode === 'map') return 'map-add';
       if (mode === 'x') return 'x-add';
       if (mode === 'erase') return 'erase';
+      if (gesture?.pencilDragRemove) return 'pencil-remove';
       return 'pencil-add';
     }
 
@@ -1041,13 +1275,6 @@
       else roomEdges.delete(key);
     }
 
-    function refreshCellWallClasses(r, c) {
-      const div = els.grid.querySelector(`[data-r="${r}"][data-c="${c}"]`);
-      if (!div) return;
-      div.classList.remove('wall-top', 'wall-bottom', 'wall-left', 'wall-right');
-      applyRoomWallClasses(div, r, c);
-    }
-
     function refreshWallEdgeVisual(key) {
       const el = els.roomEdgesLayer.querySelector(`[data-edge="${key}"]`);
       if (el) el.classList.toggle('bold', roomEdges.has(key));
@@ -1055,11 +1282,11 @@
       const r = Number(rs);
       const c = Number(cs);
       if (type === 'h') {
-        refreshCellWallClasses(r, c);
-        refreshCellWallClasses(r + 1, c);
+        refreshCell(r, c);
+        refreshCell(r + 1, c);
       } else {
-        refreshCellWallClasses(r, c);
-        refreshCellWallClasses(r, c + 1);
+        refreshCell(r, c);
+        refreshCell(r, c + 1);
       }
     }
 
@@ -1258,17 +1485,23 @@
 
       const isFurniture = cell.feature != null && !mapItemBlocks(cell.feature);
       const isBlocking = cell.feature != null && mapItemBlocks(cell.feature);
+      const isCarpet = cell.feature === 'carpet';
+      const isCar = cell.feature === 'car';
 
       if (isBlocking) {
         div.classList.add('obstacle');
-        appendMapItemIcon(div, cell.feature);
+        appendMapItemIcon(div, cell.feature, false, r, c);
         return div;
       }
 
-      if (isFurniture) div.classList.add('furniture-cell');
+      if (isFurniture) {
+        div.classList.add('furniture-cell');
+        if (isCarpet) div.classList.add('carpet-cell');
+        if (isCar) div.classList.add('car-cell');
+      }
 
       if (cell.confirmed !== null) {
-        if (isFurniture) appendMapItemIcon(div, cell.feature, true);
+        if (isFurniture) appendMapItemIcon(div, cell.feature, true, r, c);
         div.classList.add('has-confirmed');
         const span = document.createElement('span');
         span.className = 'confirmed';
@@ -1276,7 +1509,7 @@
         span.style.color = charColor(cell.confirmed);
         div.appendChild(span);
       } else if (cell.blocked || isRowColBlocked(r, c)) {
-        if (isFurniture) appendMapItemIcon(div, cell.feature, true);
+        if (isFurniture) appendMapItemIcon(div, cell.feature, true, r, c);
         if (cell.blocked) div.classList.add('user-blocked');
         if (isRowColBlocked(r, c)) div.classList.add('row-col-blocked');
         const x = document.createElement('span');
@@ -1284,7 +1517,7 @@
         x.textContent = '×';
         div.appendChild(x);
       } else if (cell.pencil.size > 0) {
-        if (isFurniture) appendMapItemIcon(div, cell.feature, true);
+        if (isFurniture) appendMapItemIcon(div, cell.feature, true, r, c);
         const marks = document.createElement('div');
         marks.className = 'marks';
         const n = characters.length;
@@ -1303,25 +1536,48 @@
         }
         div.appendChild(marks);
       } else if (isFurniture) {
-        appendMapItemIcon(div, cell.feature);
+        appendMapItemIcon(div, cell.feature, false, r, c);
       }
 
       return div;
     }
 
     function refreshCell(r, c) {
-      const old = els.grid.querySelector(`[data-r="${r}"][data-c="${c}"]`);
-      if (!old) return null;
+      const el = els.grid.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+      if (!el) return null;
       const neu = buildCellElement(r, c);
-      old.replaceWith(neu);
-      return neu;
+      const dragOver = el.classList.contains('drag-over');
+      el.className = neu.className;
+      if (dragOver) el.classList.add('drag-over');
+      el.replaceChildren(...neu.childNodes);
+      return el;
     }
 
-    function refreshAllCells() {
+    function refreshPlacementEffects() {
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           refreshCell(r, c);
         }
+      }
+    }
+
+    function refreshAfterInteraction(r, c, action, wasDragging) {
+      if (wasDragging) {
+        if (mode === 'map') refreshPlacementEffects();
+        return;
+      }
+      if (action === 'place' || action === 'map-toggle' || action === 'map-add') {
+        refreshPlacementEffects();
+        return;
+      }
+      refreshCell(r, c);
+    }
+
+    function refreshFeatureNeighborhood(r, c) {
+      for (const [dr, dc] of [[0, 0], [-1, 0], [1, 0], [0, -1], [0, 1]]) {
+        const rr = r + dr;
+        const cc = c + dc;
+        if (rr >= 0 && rr < rows && cc >= 0 && cc < cols) refreshCell(rr, cc);
       }
     }
 
@@ -1332,8 +1588,8 @@
       gesture.visited.add(key);
       if (applyCellAction(r, c, dragActionForMode())) {
         ensureGestureHistory();
-        refreshCell(r, c);
-        renderCharList();
+        if (mode === 'map') refreshFeatureNeighborhood(r, c);
+        else refreshCell(r, c);
       }
       els.grid.querySelector(`[data-r="${r}"][data-c="${c}"]`)?.classList.add('drag-over');
     }
@@ -1360,6 +1616,8 @@
 
       e.preventDefault();
 
+      layoutLock = true;
+
       gesture = {
         pointerId: e.pointerId,
         startR: hit.r,
@@ -1372,6 +1630,7 @@
         isDragging: false,
         visited: new Set(),
         historyPushed: false,
+        pencilDragRemove: selectedChar !== null && board[hit.r][hit.c].pencil.has(selectedChar),
       };
 
       hit.el.classList.add('pressing');
@@ -1421,31 +1680,42 @@
     function onGridPointerUp(e) {
       if (!gesture || gesture.pointerId !== e.pointerId) return;
 
+      const wasDragging = gesture.isDragging;
+      const startR = gesture.startR;
+      const startC = gesture.startC;
       let changed = false;
-      if (gesture.isDragging) {
+      let refreshAction = null;
+
+      if (wasDragging) {
         changed = gesture.historyPushed;
       } else if (gesture.longPressReady && mode === 'pencil') {
-        if (applyCellAction(gesture.startR, gesture.startC, 'place')) {
+        if (applyCellAction(startR, startC, 'place')) {
+          ensureGestureHistory();
+          changed = true;
+          refreshAction = 'place';
+        }
+      } else {
+        refreshAction = tapActionForMode();
+        if (applyCellAction(startR, startC, refreshAction)) {
           ensureGestureHistory();
           changed = true;
         }
-      } else if (applyCellAction(gesture.startR, gesture.startC, tapActionForMode())) {
-        ensureGestureHistory();
-        changed = true;
       }
 
       endGesture();
       unbindDocPointerListeners();
       if (changed) {
-        refreshAllCells();
+        refreshAfterInteraction(startR, startC, refreshAction, wasDragging);
         renderCharList();
       }
+      layoutLock = false;
     }
 
     function onGridPointerCancel(e) {
       if (!gesture || gesture.pointerId !== e.pointerId) return;
       endGesture();
       unbindDocPointerListeners();
+      layoutLock = false;
     }
 
     function onGridContextMenu(e) {
@@ -1456,7 +1726,7 @@
       endGesture();
       pushHistory();
       if (applyCellAction(hit.r, hit.c, 'x-toggle')) {
-        refreshAllCells();
+        refreshCell(hit.r, hit.c);
       } else {
         history.pop();
       }
@@ -1508,7 +1778,7 @@
     }
 
     function renderGrid() {
-      cellSizeLock = true;
+      layoutLock = true;
       els.grid.style.gridTemplateColumns = `repeat(${cols}, var(--cell-size))`;
       els.grid.style.gridTemplateRows = `repeat(${rows}, var(--cell-size))`;
       els.grid.innerHTML = '';
@@ -1519,7 +1789,7 @@
         }
       }
       renderRoomEdges();
-      cellSizeLock = false;
+      layoutLock = false;
     }
 
     function setMode(next) {
@@ -1577,6 +1847,9 @@
       requestAnimationFrame(updateCellSize);
     }
 
+    els.rows.addEventListener('input', () => {
+      els.cols.value = els.rows.value;
+    });
     els.createBtn.addEventListener('click', initGrid);
     els.undoBtn.addEventListener('click', undo);
     els.clearBtn.addEventListener('click', () => {
@@ -1598,10 +1871,7 @@
     els.grid.addEventListener('contextmenu', onGridContextMenu);
     els.roomEdgesLayer.addEventListener('pointerdown', onWallPointerDown);
 
-    window.addEventListener('resize', updateCellSize);
-    if (typeof ResizeObserver !== 'undefined') {
-      new ResizeObserver(updateCellSize).observe(els.gridWrap);
-    }
+    window.addEventListener('resize', scheduleCellSizeUpdate);
 
     document.querySelectorAll('.tool-btn').forEach(btn => {
       btn.addEventListener('click', () => setMode(/** @type {ToolMode} */ (btn.dataset.mode)));
