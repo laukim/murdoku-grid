@@ -1,0 +1,9 @@
+# Google sign-in uses the public client id in js/google-client.js.
+# There is no client secret and no shared access key.
+# Wrangler does not need a secret for this app.
+#
+# To sign in from a local origin, add these authorized JavaScript origins
+# on that same Google OAuth client:
+#   http://127.0.0.1:8787
+#   http://localhost:8787
+#   https://murdoku-grid.mocholate.workers.dev

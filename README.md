@@ -1,22 +1,194 @@
 # Murdoku Grid Helper
 
-A simple online grid for solving [Murdoku](https://murdoku.com) puzzles from the book when you want the same marking workflow as the official site.
+A browser grid for working [Murdoku](https://murdoku.com) puzzles with the same marking flow as the official site: pencil marks, placements, X cells, furniture, obstacles, and room walls.
 
-**Live app:** https://laukim.github.io/murdoku-grid/
+The app is a Cloudflare Worker. Static files are Workers assets, and saved layouts live in a D1 database named `murdoku-layouts`. There is no puzzle catalog in this repo — you draw or load your own layouts.
+
+**App, after deploy:** https://murdoku-grid.mocholate.workers.dev
+
+GitHub Pages (`https://laukim.github.io/murdoku-grid/`) stops once the GitHub repo is private. That is expected; Cloudflare is the host. The Worker is not published yet — the deploy steps below create it. The D1 database and empty `layouts` table are already in the account.
 
 ## What it does
 
-Set the grid size, then mark up the puzzle as you work through a case:
+Set the grid size, then mark the puzzle as you work:
 
 - **Pencil marks** — click or drag to note which characters could go in a cell
 - **Place a person** — long-press a cell to confirm someone’s position; row and column cross-outs apply automatically
 - **Mark X** — block a whole cell when no one can go there
-- **Obstacles** — mark fixed squares (furniture, etc.) that cannot hold anyone
+- **Obstacles and furniture** — tables, trees, chairs, and the other map objects
 - **Room walls** — click or drag internal grid lines to draw bold borders between rooms
 - **Character colors** — A–Z (and V for the victim) each have their own color
+- **Import JSON** — open a local room map or wall file, draw it, then keep marking
+- **Saved layouts** — store the current grid, load it later, then keep adding objects and marks
 
 Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
 
-## Run locally
+Clear all removes pencil marks, placements, and X cells. Room walls and objects stay, so a loaded layout can be marked again.
 
-Open `index.html` in your browser.
+## Auth
+
+The blank board, paste, and JSON import work with no account. Save, load, refresh, and delete call `/api/layouts` and need Google sign-in.
+
+The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`) and stores each layout under that token’s `sub`. List, read, update, and delete only see rows for that `sub`. A `user_sub` field in the JSON body is ignored.
+
+A missing or invalid token returns `401` `{ "error": "Sign in required" }`. The browser keeps a usable ID token in `localStorage` under `murdoku-grid.google-id-token` and sends `Authorization: Bearer`.
+
+Sign-in from the deployed host needs this authorized JavaScript origin on that same OAuth client in Google Cloud:
+
+- `https://murdoku-grid.mocholate.workers.dev`
+- `http://127.0.0.1:8787` and `http://localhost:8787` for local use
+
+This repo cannot change the Google Cloud console. Add the origin there before the button can finish sign-in.
+
+## API
+
+| Method | Path | Body | Result |
+| --- | --- | --- | --- |
+| `GET` | `/api/layouts` | | `{ layouts: [{ id, title, width, height, created_at, updated_at }] }` |
+| `POST` | `/api/layouts` | layout | `201 { layout }` |
+| `GET` | `/api/layouts/:id` | | `{ layout }` |
+| `PUT` | `/api/layouts/:id` | layout | `{ layout }` |
+| `DELETE` | `/api/layouts/:id` | | `{ ok: true }` |
+
+`width` is the column count and `height` is the row count (2–20). A layout body:
+
+```json
+{
+  "title": "Manor study",
+  "width": 9,
+  "height": 9,
+  "characters": ["A", "B", "C", "D", "E", "F", "G", "H", "V"],
+  "walls": ["h,0,1", "v,2,3"],
+  "objects": [{ "r": 1, "c": 2, "id": "table" }],
+  "marks": [{ "r": 0, "c": 0, "confirmed": null, "blocked": false, "pencil": [0, 1] }]
+}
+```
+
+- `walls` are internal borders. `h,r,c` is the horizontal line under row `r` at column `c`. `v,r,c` is the vertical line to the right of column `c` in row `r`.
+- `objects` is optional. Each entry is a furniture or obstacle id on a cell (`table`, `tree`, `chair`, …). An empty array is a room-only layout; load it and add objects later. Object ids are lowercase slugs, so new kinds can be stored without a schema change.
+- `marks` is optional solving state: pencil indexes, a confirmed character index, or an X (`blocked`). Uncheck “Save pencil marks and placements” to store only the rooms and objects.
+
+## Import a layout file
+
+The page’s **Import JSON** button reads a local file and draws it with the same room walls, cells, and object tools. Nothing is downloaded. After import, add obstacles or marks, then **Save current** to store the layout in D1. Load it later from the saved-layout list.
+
+`examples/garden-path.json` is a small handmade sample, not a puzzle catalog:
+
+```json
+{
+  "title": "Garden path",
+  "characters": ["A", "B", "C", "V"],
+  "rooms": ["AABB", "AABB", "CCCB"],
+  "obstacles": [{ "r": 0, "c": 2, "id": "tree" }]
+}
+```
+
+That room map is 4 columns by 3 rows. Cells that share a letter are one room. A different letter next door becomes a wall: `v,0,1`, `v,1,1`, `v,2,2`, `h,1,0`, `h,1,1`, and `h,1,2`.
+
+A file can describe rooms in any of these ways:
+
+- `rooms`, `zones`, `roomMap`, or `zoneMap`: a grid of room ids. Each row is an array (`[1, 1, 2, 2]`), a character string (`"AABB"`), or comma-separated ids (`"living room,study"`). A flat list of one id per cell is row-major and needs `width` and `height`. Adjacent cells with different ids become walls.
+- `walls`, `wallSegments`, or `edges`: internal borders, with or without a room map. Extra walls are added on top of a map. Each entry can be `"h,r,c"` / `"v,r,c"`, `{ "dir": "h", "r": 0, "c": 1 }`, `{ "from": [0, 0], "to": [0, 1] }`, or `[[0, 0], [1, 0]]`. `h,r,c` is the line under row `r` at column `c`. `v,r,c` is the line to the right of column `c` in row `r`.
+- `width` and `height` (columns and rows, 2–20). Optional when a room map sets the size. A wall-only file needs both.
+
+Optional objects use `obstacles`, `objects`, `features`, or a grid in `obstacleMap` / `objectMap`. A cell is `{ "r": 0, "c": 2, "id": "tree" }` (`row`/`col`/`x`/`y` and `type` work too). In a grid, `""`, `"-"`, and `"."` are empty. Ids drawn by the picker: `chair`, `bed`, `carpet`, `car`, `oil-slick`, `table`, `bookshelf`, `plant`, `tree`, `tv`, `statue`, `other`. Any other lowercase slug is kept so a later pass can still edit that cell; the grid shows it with the generic obstacle icon.
+
+`characters` defaults to `A` … `V` using `min(width, height)` labels, same as Create grid. `marks` uses the saved-layout shape. A character label such as `"A"` is accepted anywhere an index is accepted and stored as an index.
+
+The same converter runs from the shell for a file already on disk. It prints the layout JSON, a D1 `INSERT`, or posts to the Worker:
+
+```bash
+node scripts/import-layout.mjs examples/garden-path.json
+node scripts/import-layout.mjs examples/garden-path.json --sql > /tmp/garden-path.sql
+npx wrangler d1 execute murdoku-layouts --remote --file=/tmp/garden-path.sql
+node scripts/import-layout.mjs ./my-layout.json \
+  --post https://murdoku-grid.mocholate.workers.dev \
+  --key "$GOOGLE_ID_TOKEN"
+```
+
+`--title` replaces the title in the file. `--key` and `GOOGLE_ID_TOKEN` are a Google ID token from a signed-in browser. `--sql` can take `--user-sub` so the inserted row belongs to that Google account; an empty `user_sub` stays hidden from every signed-in list. The command rejects an `http://` or `https://` path. The same command accepts a pasted board saved as a local `.html` file.
+
+## Playground board paste
+
+Paste one board at a time into **Paste playground board**, then **Convert paste**. The grid draws the rooms. Add marks with the existing tools and **Save current** to store it in D1. This does not fetch the playground site.
+
+Two inputs convert to the same `h,r,c` / `v,r,c` walls:
+
+**Board HTML.** Cells are `board-cell` elements in row-major order. `board-cell-crossed` becomes an obstacle (`other`, unless the cell has `data-object`). A line is thick when its `--line-thickness` is about 10px (8px or more). The outer border is thick too and is not a room wall. Paste every line in order, including the thin ones, or mark internal lines with `data-after-row` / `data-after-col` (1-based). `data-cols` and `data-rows` set the size when the cell count is not a square.
+
+**Compact JSON.** `thickH` and `thickV` are 1-based: the line after that row or column, across the whole board. `crossed` indexes are 0-based and row-major. `examples/four-rooms.json` is the 6×6 case with four 3×3 rooms:
+
+```json
+{
+  "title": "Four rooms",
+  "width": 6,
+  "height": 6,
+  "thickH": [3],
+  "thickV": [3],
+  "crossed": [5, 18, 23, 26, 29, 30]
+}
+```
+
+After row 3 is `h,2,0` … `h,2,5`. After column 3 is `v,0,2` … `v,5,2`. The crossed indexes land on `(0,5)`, `(3,0)`, `(3,5)`, `(4,2)`, `(4,5)`, and `(5,0)` as `other` obstacles. A later save can replace `other` with a tree, table, or any other object.
+
+## Schema
+
+`migrations/0001_layouts.sql` creates the table. `migrations/0002_user_sub.sql` adds the owner column:
+
+- `id` — text primary key (UUID)
+- `user_sub` — Google account `sub` that owns the row
+- `title` — name
+- `width`, `height` — columns and rows
+- `walls_json` — room borders
+- `objects_json` — furniture and obstacles; safe to update on a later save
+- `marks_json` — pencil marks, placements, and X cells
+- `characters_json` — labels, which also drive the colors
+- `created_at`, `updated_at` — ISO-8601 timestamps
+
+`0002` is a plain `ALTER TABLE`. Run it once with `npm run db:migrate` before deploying the Worker that expects `user_sub`. If migrate reports a duplicate column, the column is already present; continue with `npm run deploy`. The Worker also adds the column when it is missing, so a database created only by the first migration still opens.
+
+## Local
+
+API tests use an in-memory D1 stand-in (no Cloudflare login):
+
+```bash
+npm test
+```
+
+Click through the UI the same way. The board, paste, and import work before sign-in. Save and load ask for Google:
+
+```bash
+npm run dev:local
+```
+
+Open http://127.0.0.1:8787.
+
+Wrangler’s local runtime does not need a secret:
+
+```bash
+npm install
+npm run dev
+```
+
+## Deploy
+
+The D1 database already exists in the Cloudflare account:
+
+- name: `murdoku-layouts`
+- id: `99a3ebdf-139e-4421-8736-fa32f9d261d8`
+
+That id is in `wrangler.jsonc`. `layouts` is already created there, so the migration’s `CREATE TABLE IF NOT EXISTS` is safe and records Wrangler’s migration history.
+
+This environment could not finish `wrangler deploy`: there is no Wrangler API token, and the assets upload session token cannot be attached from here. From a machine logged in with `npx wrangler login` (or `CLOUDFLARE_API_TOKEN`):
+
+```bash
+npm install
+npm run db:migrate
+npm run deploy
+```
+
+`deploy.sh` applies the remote migration and deploys. There is no access-key secret to set. After deploy, add `https://murdoku-grid.mocholate.workers.dev` as an authorized JavaScript origin on the Google OAuth client so sign-in can complete.
+
+Workers assets serve `index.html`. `/api/*` runs the Worker first, same pattern as `laukim/cube-learning` (`3x3coach`). `.assetsignore` keeps the Worker source, migrations, and `node_modules` off the public asset upload.
+
+The workers.dev hostname is `murdoku-grid.mocholate.workers.dev`.

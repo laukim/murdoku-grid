@@ -1,0 +1,12 @@
+{
+  "title": "Garden path",
+  "characters": ["A", "B", "C", "V"],
+  "rooms": [
+    "AABB",
+    "AABB",
+    "CCCB"
+  ],
+  "obstacles": [
+    { "r": 0, "c": 2, "id": "tree" }
+  ]
+}

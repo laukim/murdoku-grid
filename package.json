@@ -1,0 +1,17 @@
+{
+  "name": "murdoku-grid",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "dev:local": "node --disable-warning=ExperimentalWarning scripts/dev-server.mjs",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply murdoku-layouts --remote",
+    "test": "node --disable-warning=ExperimentalWarning scripts/test-layouts.mjs && node scripts/test-import.mjs && node scripts/test-board.mjs && node scripts/test-google-auth.mjs",
+    "import:layout": "node scripts/import-layout.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.42.0"
+  }
+}
