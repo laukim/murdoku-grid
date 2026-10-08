@@ -57,7 +57,7 @@ const migration = readFileSync(new URL("../migrations/0001_layouts.sql", import.
 assert.equal(migration, SCHEMA_SQL);
 
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-for (const id of ["createBtn", "saveLayoutBtn", "updateLayoutBtn", "loadLayoutBtn", "deleteLayoutBtn", "layoutSelect", "accessKey", "furniturePicker", "obstaclePicker"]) {
+for (const id of ["createBtn", "importLayoutBtn", "importLayoutFile", "saveLayoutBtn", "updateLayoutBtn", "loadLayoutBtn", "deleteLayoutBtn", "layoutSelect", "accessKey", "furniturePicker", "obstaclePicker"]) {
   assert.match(html, new RegExp(`id="${id}"`));
 }
 assert.match(html, /data-mode="x"/);

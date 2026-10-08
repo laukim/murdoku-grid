@@ -18,6 +18,7 @@ Set the grid size, then mark the puzzle as you work:
 - **Obstacles and furniture** — tables, trees, chairs, and the other map objects
 - **Room walls** — click or drag internal grid lines to draw bold borders between rooms
 - **Character colors** — A–Z (and V for the victim) each have their own color
+- **Import JSON** — open a local room map or wall file, draw it, then keep marking
 - **Saved layouts** — store the current grid, load it later, then keep adding objects and marks
 
 Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
@@ -65,6 +66,46 @@ If `LAYOUT_KEY` is missing, the API returns 503. A missing or wrong key returns 
 - `walls` are internal borders. `h,r,c` is the horizontal line under row `r` at column `c`. `v,r,c` is the vertical line to the right of column `c` in row `r`.
 - `objects` is optional. Each entry is a furniture or obstacle id on a cell (`table`, `tree`, `chair`, …). An empty array is a room-only layout; load it and add objects later. Object ids are lowercase slugs, so new kinds can be stored without a schema change.
 - `marks` is optional solving state: pencil indexes, a confirmed character index, or an X (`blocked`). Uncheck “Save pencil marks and placements” to store only the rooms and objects.
+
+## Import a layout file
+
+The page’s **Import JSON** button reads a local file and draws it with the same room walls, cells, and object tools. Nothing is downloaded. After import, add obstacles or marks, then **Save current** to store the layout in D1. Load it later from the saved-layout list.
+
+`examples/garden-path.json` is a small handmade sample, not a puzzle catalog:
+
+```json
+{
+  "title": "Garden path",
+  "characters": ["A", "B", "C", "V"],
+  "rooms": ["AABB", "AABB", "CCCB"],
+  "obstacles": [{ "r": 0, "c": 2, "id": "tree" }]
+}
+```
+
+That room map is 4 columns by 3 rows. Cells that share a letter are one room. A different letter next door becomes a wall: `v,0,1`, `v,1,1`, `v,2,2`, `h,1,0`, `h,1,1`, and `h,1,2`.
+
+A file can describe rooms in any of these ways:
+
+- `rooms`, `zones`, `roomMap`, or `zoneMap`: a grid of room ids. Each row is an array (`[1, 1, 2, 2]`), a character string (`"AABB"`), or comma-separated ids (`"living room,study"`). A flat list of one id per cell is row-major and needs `width` and `height`. Adjacent cells with different ids become walls.
+- `walls`, `wallSegments`, or `edges`: internal borders, with or without a room map. Extra walls are added on top of a map. Each entry can be `"h,r,c"` / `"v,r,c"`, `{ "dir": "h", "r": 0, "c": 1 }`, `{ "from": [0, 0], "to": [0, 1] }`, or `[[0, 0], [1, 0]]`. `h,r,c` is the line under row `r` at column `c`. `v,r,c` is the line to the right of column `c` in row `r`.
+- `width` and `height` (columns and rows, 2–20). Optional when a room map sets the size. A wall-only file needs both.
+
+Optional objects use `obstacles`, `objects`, `features`, or a grid in `obstacleMap` / `objectMap`. A cell is `{ "r": 0, "c": 2, "id": "tree" }` (`row`/`col`/`x`/`y` and `type` work too). In a grid, `""`, `"-"`, and `"."` are empty. Ids drawn by the picker: `chair`, `bed`, `carpet`, `car`, `oil-slick`, `table`, `bookshelf`, `plant`, `tree`, `tv`, `statue`, `other`. Any other lowercase slug is kept so a later pass can still edit that cell; the grid shows it with the generic obstacle icon.
+
+`characters` defaults to `A` … `V` using `min(width, height)` labels, same as Create grid. `marks` uses the saved-layout shape. A character label such as `"A"` is accepted anywhere an index is accepted and stored as an index.
+
+The same converter runs from the shell for a file already on disk. It prints the layout JSON, a D1 `INSERT`, or posts to the Worker:
+
+```bash
+node scripts/import-layout.mjs examples/garden-path.json
+node scripts/import-layout.mjs examples/garden-path.json --sql > /tmp/garden-path.sql
+npx wrangler d1 execute murdoku-layouts --remote --file=/tmp/garden-path.sql
+node scripts/import-layout.mjs ./my-layout.json \
+  --post https://murdoku-grid.mocholate.workers.dev \
+  --key "$LAYOUT_KEY"
+```
+
+`--title` replaces the title in the file. The command rejects an `http://` or `https://` path.
 
 ## Schema
 

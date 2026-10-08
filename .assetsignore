@@ -6,6 +6,7 @@ node_modules
 worker
 migrations
 scripts
+examples
 package.json
 package-lock.json
 wrangler.jsonc
