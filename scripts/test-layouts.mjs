@@ -5,7 +5,14 @@ import { SCHEMA_SQL } from "../worker/schema.js";
 import { handleLayoutsRequest } from "../worker/layouts-api.js";
 import worker from "../worker/index.js";
 
-const KEY = "test-key-123456";
+const KIM = "kim-token";
+const OTHER = "other-token";
+
+async function verify(token) {
+  if (token === KIM) return { sub: "kim-sub", email: "kim.lau817@gmail.com" };
+  if (token === OTHER) return { sub: "other-sub", email: "other@example.com" };
+  throw new Error("bad token");
+}
 
 function clock(start = "2026-10-08T12:00:00.000Z") {
   let n = 0;
@@ -18,11 +25,11 @@ function ids() {
   return () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`;
 }
 
-function envWith(db, key = KEY) {
-  return { DB: db, LAYOUT_KEY: key };
+function envWith(db) {
+  return { DB: db };
 }
 
-async function call(env, method, path, { key = KEY, body, deps } = {}) {
+async function call(env, method, path, { key = KIM, body, deps } = {}) {
   const headers = new Headers();
   if (key != null) headers.set("authorization", `Bearer ${key}`);
   let payload;
@@ -35,7 +42,7 @@ async function call(env, method, path, { key = KEY, body, deps } = {}) {
     headers,
     body: payload,
   });
-  const response = await handleLayoutsRequest(request, env, deps);
+  const response = await handleLayoutsRequest(request, env, { verify, ...deps });
   const text = await response.text();
   return { status: response.status, body: text ? JSON.parse(text) : null };
 }
@@ -57,9 +64,11 @@ const migration = readFileSync(new URL("../migrations/0001_layouts.sql", import.
 assert.equal(migration, SCHEMA_SQL);
 
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-for (const id of ["createBtn", "boardPaste", "convertPasteBtn", "importLayoutBtn", "importLayoutFile", "saveLayoutBtn", "updateLayoutBtn", "loadLayoutBtn", "deleteLayoutBtn", "layoutSelect", "accessKey", "furniturePicker", "obstaclePicker"]) {
+for (const id of ["createBtn", "boardPaste", "convertPasteBtn", "importLayoutBtn", "importLayoutFile", "saveLayoutBtn", "updateLayoutBtn", "loadLayoutBtn", "deleteLayoutBtn", "layoutSelect", "signInBtn", "signOutBtn", "accountEmail", "furniturePicker", "obstaclePicker"]) {
   assert.match(html, new RegExp(`id="${id}"`));
 }
+assert.doesNotMatch(html, /id="accessKey"/);
+assert.match(html, /Sign in with Google/);
 assert.match(html, /data-mode="x"/);
 assert.match(html, /data-mode="erase"/);
 assert.match(html, /Room walls/);
@@ -69,13 +78,12 @@ const env = envWith(db);
 const deps = { now: clock(), id: ids() };
 
 {
-  const missing = await call(envWith(db, ""), "GET", "/api/layouts", { key: null });
-  assert.equal(missing.status, 503);
   const noKey = await call(env, "GET", "/api/layouts", { key: null });
   assert.equal(noKey.status, 401);
+  assert.equal(noKey.body.error, "Sign in required");
   const badKey = await call(env, "GET", "/api/layouts", { key: "nope-nope-nope" });
   assert.equal(badKey.status, 401);
-  assert.equal(badKey.body.error, "Unauthorized");
+  assert.equal(badKey.body.error, "Sign in required");
 }
 
 {
@@ -178,10 +186,35 @@ const deps = { now: clock(), id: ids() };
   const other = new Request("https://murdoku-grid.test/", { method: "GET" });
   const response = await worker.fetch(other, env);
   assert.equal(response.status, 404);
-  const api = await worker.fetch(new Request("https://murdoku-grid.test/api/layouts", {
-    headers: { authorization: `Bearer ${KEY}` },
-  }), env);
-  assert.equal(api.status, 200);
+  const api = await worker.fetch(new Request("https://murdoku-grid.test/api/layouts"), env);
+  assert.equal(api.status, 401);
+}
+
+{
+  const owned = await call(env, "POST", "/api/layouts", {
+    body: { ...sample(), title: "Kim only", user_sub: "other-sub" },
+    deps,
+  });
+  assert.equal(owned.status, 201);
+  const kimList = await call(env, "GET", "/api/layouts", { deps });
+  assert.ok(kimList.body.layouts.some((layout) => layout.id === owned.body.layout.id));
+  const otherList = await call(env, "GET", "/api/layouts", { key: OTHER, deps });
+  assert.equal(otherList.body.layouts.some((layout) => layout.id === owned.body.layout.id), false);
+  const otherRead = await call(env, "GET", `/api/layouts/${owned.body.layout.id}`, { key: OTHER, deps });
+  assert.equal(otherRead.status, 404);
+  const otherWrite = await call(env, "PUT", `/api/layouts/${owned.body.layout.id}`, {
+    key: OTHER,
+    body: sample({ title: "Taken" }),
+    deps,
+  });
+  assert.equal(otherWrite.status, 404);
+  const otherDelete = await call(env, "DELETE", `/api/layouts/${owned.body.layout.id}`, { key: OTHER, deps });
+  assert.equal(otherDelete.status, 404);
+  const stillThere = await call(env, "GET", `/api/layouts/${owned.body.layout.id}`, { deps });
+  assert.equal(stillThere.status, 200);
+  assert.equal(stillThere.body.layout.title, "Kim only");
+  const row = db.db.prepare("SELECT user_sub FROM layouts WHERE id = ?").get(owned.body.layout.id);
+  assert.equal(row.user_sub, "kim-sub");
 }
 
 console.log("layouts api tests passed");

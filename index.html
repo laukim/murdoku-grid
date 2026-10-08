@@ -140,6 +140,19 @@
       color: #555;
     }
 
+    .layouts-account {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.5rem;
+      min-height: 2.4rem;
+    }
+
+    .layouts-account #accountEmail {
+      font-size: 0.85rem;
+      color: #333;
+    }
+
     .layouts-paste {
       margin-top: 0.75rem;
     }
@@ -658,15 +671,17 @@
 
   <section class="layouts" id="layoutsPanel">
     <h2>Saved layouts</h2>
-    <p class="sidebar-note">Paste one playground board, or import a JSON room map. Thick lines (~10px, not the outer border) become room walls. <code>board-cell-crossed</code> cells become obstacles. Then mark and save.</p>
+    <p class="sidebar-note">Paste one playground board, or import a JSON room map. Thick lines (~10px, not the outer border) become room walls. <code>board-cell-crossed</code> cells become obstacles. The board works without an account. Sign in with Google to save and load.</p>
     <div class="layouts-paste">
       <label for="boardPaste">Paste playground board</label>
       <textarea id="boardPaste" rows="5" spellcheck="false" placeholder="Paste one board’s HTML, or { &quot;width&quot;: 6, &quot;height&quot;: 6, &quot;thickH&quot;: [3], &quot;thickV&quot;: [3], &quot;crossed&quot;: [5, 18] }"></textarea>
     </div>
     <div class="layouts-row">
-      <div class="field">
-        <label for="accessKey">Access key</label>
-        <input id="accessKey" type="password" autocomplete="current-password" placeholder="Shared secret">
+      <div class="layouts-account" id="accountBar">
+        <button type="button" id="signInBtn">Sign in with Google</button>
+        <div id="googleButtonSlot" hidden></div>
+        <span id="accountEmail" hidden></span>
+        <button type="button" id="signOutBtn" hidden>Sign out</button>
       </div>
       <div class="field">
         <label for="layoutTitle">Title</label>
@@ -897,8 +912,9 @@
     let roomEdges = new Set();
     /** @type {string|null} D1 id of the layout last loaded or saved */
     let loadedLayoutId = null;
-    const ACCESS_KEY_STORAGE = 'murdoku-grid.access-key';
     let layoutsQueue = Promise.resolve();
+    let googleAccount = null;
+    let googleClientId = '';
 
     const els = {
       rows: document.getElementById('rows'),
@@ -917,7 +933,10 @@
       colLabels: document.getElementById('colLabels'),
       undoBtn: document.getElementById('undoBtn'),
       clearBtn: document.getElementById('clearBtn'),
-      accessKey: document.getElementById('accessKey'),
+      signInBtn: document.getElementById('signInBtn'),
+      googleButtonSlot: document.getElementById('googleButtonSlot'),
+      accountEmail: document.getElementById('accountEmail'),
+      signOutBtn: document.getElementById('signOutBtn'),
       layoutTitle: document.getElementById('layoutTitle'),
       includeMarks: document.getElementById('includeMarks'),
       layoutSelect: document.getElementById('layoutSelect'),
@@ -2042,22 +2061,150 @@
       renderMapPickers();
       renderGrid();
       setMode('pencil');
-      setLayoutStatus('New grid. Save current to store it.');
+      setLayoutStatus(currentToken()
+        ? 'New grid. Save current to store it.'
+        : 'New grid. Sign in with Google when you want to save it.');
       requestAnimationFrame(updateCellSize);
     }
 
-    function accessKey() {
-      return els.accessKey.value.trim();
+    async function loadGoogleModules() {
+      if (googleAccount) return;
+      const [account, client] = await Promise.all([
+        import('./js/google-account.js'),
+        import('./js/google-client.js'),
+      ]);
+      googleAccount = account;
+      googleClientId = client.GOOGLE_CLIENT_ID;
     }
 
-    function storeAccessKey() {
+    function currentToken() {
+      if (!googleAccount) return '';
       try {
-        const key = accessKey();
-        if (key) localStorage.setItem(ACCESS_KEY_STORAGE, key);
-        else localStorage.removeItem(ACCESS_KEY_STORAGE);
+        const token = googleAccount.readGoogleToken(localStorage);
+        return googleAccount.tokenUsable(token) ? token : '';
       } catch {
-        // Private browsing can block storage; the field still works for this tab.
+        return '';
       }
+    }
+
+    function paintSignedOut() {
+      els.signInBtn.hidden = false;
+      els.googleButtonSlot.hidden = true;
+      els.accountEmail.hidden = true;
+      els.accountEmail.textContent = '';
+      els.signOutBtn.hidden = true;
+    }
+
+    function paintSignedIn(email) {
+      els.signInBtn.hidden = true;
+      els.googleButtonSlot.hidden = true;
+      els.accountEmail.hidden = false;
+      els.accountEmail.textContent = email || 'Signed in';
+      els.signOutBtn.hidden = false;
+    }
+
+    function clearGoogleSession() {
+      try {
+        if (googleAccount) googleAccount.writeGoogleToken(localStorage, '');
+      } catch {
+        // Private browsing can block storage. The board still works in this tab.
+      }
+      try {
+        window.google?.accounts?.id?.disableAutoSelect();
+      } catch {
+        // Google Identity Services may not have loaded.
+      }
+      paintSignedOut();
+      fillLayoutSelect([]);
+    }
+
+    function loadGisScript() {
+      if (window.google?.accounts?.id) return Promise.resolve();
+      if (loadGisScript.promise) return loadGisScript.promise;
+      loadGisScript.promise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        const timer = setTimeout(() => {
+          loadGisScript.promise = null;
+          reject(new Error('Google sign-in did not load. The board still works locally.'));
+        }, 8000);
+        script.onload = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+        script.onerror = () => {
+          clearTimeout(timer);
+          loadGisScript.promise = null;
+          reject(new Error('Google sign-in did not load. The board still works locally.'));
+        };
+        document.head.appendChild(script);
+      });
+      return loadGisScript.promise;
+    }
+
+    async function mountGoogleButton() {
+      await loadGoogleModules();
+      await loadGisScript();
+      const gis = window.google?.accounts?.id;
+      if (!gis) throw new Error('Google sign-in did not load. The board still works locally.');
+      gis.initialize({
+        client_id: googleClientId,
+        callback: (response) => {
+          withLayouts(() => acceptGoogleCredential(response));
+        },
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      els.googleButtonSlot.hidden = false;
+      els.googleButtonSlot.replaceChildren();
+      gis.renderButton(els.googleButtonSlot, {
+        theme: 'filled_black',
+        size: 'medium',
+        text: 'signin_with',
+        width: 220,
+      });
+      els.signInBtn.hidden = true;
+      gis.prompt();
+    }
+
+    async function acceptGoogleCredential(response) {
+      const token = response?.credential || '';
+      if (!googleAccount?.tokenUsable(token)) {
+        throw new Error('Google did not return a usable sign-in. The board is unchanged.');
+      }
+      googleAccount.writeGoogleToken(localStorage, token);
+      const email = googleAccount.decodeJwtPayload(token)?.email || 'Signed in';
+      paintSignedIn(email);
+      await refreshLayouts(true);
+      setLayoutStatus(`Signed in as ${email}.`, 'ok');
+    }
+
+    function signOut() {
+      clearGoogleSession();
+      setLayoutStatus('Signed out. The board stays on this device until you save it.');
+    }
+
+    async function bootAccount() {
+      try {
+        await loadGoogleModules();
+      } catch {
+        paintSignedOut();
+        return;
+      }
+      const token = currentToken();
+      if (!token) {
+        paintSignedOut();
+        try {
+          await mountGoogleButton();
+        } catch {
+          paintSignedOut();
+        }
+        return;
+      }
+      const email = googleAccount.decodeJwtPayload(token)?.email || 'Signed in';
+      paintSignedIn(email);
+      withLayouts(() => refreshLayouts(true));
     }
 
     function setLayoutStatus(message, kind) {
@@ -2067,14 +2214,14 @@
     }
 
     async function api(path, { method = 'GET', body } = {}) {
-      const key = accessKey();
-      if (!key) throw new Error('Enter the access key first.');
+      const token = currentToken();
+      if (!token) throw new Error('Sign in with Google to save layouts.');
       let response;
       try {
         response = await fetch(path, {
           method,
           headers: {
-            authorization: `Bearer ${key}`,
+            authorization: `Bearer ${token}`,
             ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
           },
           body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -2086,6 +2233,10 @@
       let payload = null;
       if (text) {
         try { payload = JSON.parse(text); } catch { payload = null; }
+      }
+      if (response.status === 401) {
+        clearGoogleSession();
+        throw new Error('Sign in with Google to save layouts.');
       }
       if (!response.ok) throw new Error(payload?.error || `Request failed (${response.status})`);
       return payload || {};
@@ -2126,7 +2277,9 @@
       els.layoutSelect.innerHTML = '';
       const placeholder = document.createElement('option');
       placeholder.value = '';
-      placeholder.textContent = layouts.length ? 'Choose a saved layout…' : 'No saved layouts yet';
+      placeholder.textContent = layouts.length
+        ? 'Choose a saved layout…'
+        : (currentToken() ? 'No saved layouts yet' : 'Sign in to see saved layouts');
       els.layoutSelect.appendChild(placeholder);
       for (const layout of layouts) {
         const option = document.createElement('option');
@@ -2144,9 +2297,9 @@
     }
 
     async function refreshLayouts(silent) {
-      if (!accessKey()) {
+      if (!currentToken()) {
         fillLayoutSelect([]);
-        if (!silent) setLayoutStatus('Enter the access key to load saved layouts.');
+        if (!silent) setLayoutStatus('Sign in with Google to save layouts.');
         return;
       }
       const { layouts } = await api('/api/layouts');
@@ -2273,10 +2426,8 @@
       els.cols.value = els.rows.value;
     });
     els.createBtn.addEventListener('click', initGrid);
-    els.accessKey.addEventListener('change', () => {
-      storeAccessKey();
-      withLayouts(() => refreshLayouts(true));
-    });
+    els.signInBtn.addEventListener('click', () => withLayouts(mountGoogleButton));
+    els.signOutBtn.addEventListener('click', signOut);
     els.convertPasteBtn.addEventListener('click', () => withLayouts(convertPastedBoard));
     els.importLayoutBtn.addEventListener('click', () => els.importLayoutFile.click());
     els.importLayoutFile.addEventListener('change', () => {
@@ -2290,12 +2441,7 @@
     els.loadLayoutBtn.addEventListener('click', () => withLayouts(loadSelectedLayout));
     els.refreshLayoutsBtn.addEventListener('click', () => withLayouts(() => refreshLayouts()));
     els.deleteLayoutBtn.addEventListener('click', () => withLayouts(deleteSelectedLayout));
-    try {
-      els.accessKey.value = localStorage.getItem(ACCESS_KEY_STORAGE) || '';
-    } catch {
-      els.accessKey.value = '';
-    }
-    if (els.accessKey.value) withLayouts(() => refreshLayouts(true));
+    bootAccount();
     els.undoBtn.addEventListener('click', undo);
     els.clearBtn.addEventListener('click', () => {
       if (!confirm('Clear all marks and placements?')) return;

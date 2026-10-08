@@ -67,11 +67,11 @@ export function importPlaygroundLayout(input, options = {}) {
   };
 }
 
-export function layoutInsertSql(layout, { id, now } = {}) {
+export function layoutInsertSql(layout, { id, now, userSub = "" } = {}) {
   const layoutId = id || crypto.randomUUID();
   const ts = now || new Date().toISOString();
   return `INSERT INTO layouts (
-  id, title, width, height, walls_json, objects_json, marks_json, characters_json, created_at, updated_at
+  id, title, width, height, walls_json, objects_json, marks_json, characters_json, created_at, updated_at, user_sub
 ) VALUES (
   ${sqlString(layoutId)},
   ${sqlString(layout.title)},
@@ -82,7 +82,8 @@ export function layoutInsertSql(layout, { id, now } = {}) {
   ${sqlString(JSON.stringify(layout.marks))},
   ${sqlString(JSON.stringify(layout.characters))},
   ${sqlString(ts)},
-  ${sqlString(ts)}
+  ${sqlString(ts)},
+  ${sqlString(String(userSub))}
 );`;
 }
 

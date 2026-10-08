@@ -27,17 +27,18 @@ Clear all removes pencil marks, placements, and X cells. Room walls and objects 
 
 ## Auth
 
-Layouts are a private personal tool. Every `/api/layouts` request needs:
+The blank board, paste, and JSON import work with no account. Save, load, refresh, and delete call `/api/layouts` and need Google sign-in.
 
-```
-Authorization: Bearer <LAYOUT_KEY>
-```
+The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`) and stores each layout under that token’s `sub`. List, read, update, and delete only see rows for that `sub`. A `user_sub` field in the JSON body is ignored.
 
-The Worker reads `LAYOUT_KEY` from a Wrangler secret (or `.dev.vars` locally). The page stores the same value in `localStorage` under `murdoku-grid.access-key` and sends it from the browser. There is no Google sign-in.
+A missing or invalid token returns `401` `{ "error": "Sign in required" }`. The browser keeps a usable ID token in `localStorage` under `murdoku-grid.google-id-token` and sends `Authorization: Bearer`.
 
-Anyone with the key can list, change, and delete layouts. Use a long random string, and do not commit it.
+Sign-in from the deployed host needs this authorized JavaScript origin on that same OAuth client in Google Cloud:
 
-If `LAYOUT_KEY` is missing, the API returns 503. A missing or wrong key returns 401.
+- `https://murdoku-grid.mocholate.workers.dev`
+- `http://127.0.0.1:8787` and `http://localhost:8787` for local use
+
+This repo cannot change the Google Cloud console. Add the origin there before the button can finish sign-in.
 
 ## API
 
@@ -102,10 +103,10 @@ node scripts/import-layout.mjs examples/garden-path.json --sql > /tmp/garden-pat
 npx wrangler d1 execute murdoku-layouts --remote --file=/tmp/garden-path.sql
 node scripts/import-layout.mjs ./my-layout.json \
   --post https://murdoku-grid.mocholate.workers.dev \
-  --key "$LAYOUT_KEY"
+  --key "$GOOGLE_ID_TOKEN"
 ```
 
-`--title` replaces the title in the file. The command rejects an `http://` or `https://` path. The same command accepts a pasted board saved as a local `.html` file.
+`--title` replaces the title in the file. `--key` and `GOOGLE_ID_TOKEN` are a Google ID token from a signed-in browser. `--sql` can take `--user-sub` so the inserted row belongs to that Google account; an empty `user_sub` stays hidden from every signed-in list. The command rejects an `http://` or `https://` path. The same command accepts a pasted board saved as a local `.html` file.
 
 ## Playground board paste
 
@@ -132,9 +133,10 @@ After row 3 is `h,2,0` … `h,2,5`. After column 3 is `v,0,2` … `v,5,2`. The c
 
 ## Schema
 
-`migrations/0001_layouts.sql`:
+`migrations/0001_layouts.sql` creates the table. `migrations/0002_user_sub.sql` adds the owner column:
 
 - `id` — text primary key (UUID)
+- `user_sub` — Google account `sub` that owns the row
 - `title` — name
 - `width`, `height` — columns and rows
 - `walls_json` — room borders
@@ -142,6 +144,8 @@ After row 3 is `h,2,0` … `h,2,5`. After column 3 is `v,0,2` … `v,5,2`. The c
 - `marks_json` — pencil marks, placements, and X cells
 - `characters_json` — labels, which also drive the colors
 - `created_at`, `updated_at` — ISO-8601 timestamps
+
+`0002` is a plain `ALTER TABLE`. Run it once with `npm run db:migrate` before deploying the Worker that expects `user_sub`. If migrate reports a duplicate column, the column is already present; continue with `npm run deploy`. The Worker also adds the column when it is missing, so a database created only by the first migration still opens.
 
 ## Local
 
@@ -151,7 +155,7 @@ API tests use an in-memory D1 stand-in (no Cloudflare login):
 npm test
 ```
 
-Click through the UI the same way, with access key `local-dev-key`:
+Click through the UI the same way. The board, paste, and import work before sign-in. Save and load ask for Google:
 
 ```bash
 npm run dev:local
@@ -159,10 +163,9 @@ npm run dev:local
 
 Open http://127.0.0.1:8787.
 
-Wrangler’s local runtime (uses `.dev.vars`):
+Wrangler’s local runtime does not need a secret:
 
 ```bash
-cp .dev.vars.example .dev.vars
 npm install
 npm run dev
 ```
@@ -180,12 +183,11 @@ This environment could not finish `wrangler deploy`: there is no Wrangler API to
 
 ```bash
 npm install
-npx wrangler secret put LAYOUT_KEY
 npm run db:migrate
 npm run deploy
 ```
 
-`deploy.sh` applies the remote migration and deploys. Set the secret first. Put the same secret in the page’s Access key field.
+`deploy.sh` applies the remote migration and deploys. There is no access-key secret to set. After deploy, add `https://murdoku-grid.mocholate.workers.dev` as an authorized JavaScript origin on the Google OAuth client so sign-in can complete.
 
 Workers assets serve `index.html`. `/api/*` runs the Worker first, same pattern as `laukim/cube-learning` (`3x3coach`). `.assetsignore` keeps the Worker source, migrations, and `node_modules` off the public asset upload.
 

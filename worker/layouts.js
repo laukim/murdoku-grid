@@ -8,6 +8,14 @@ export async function ensureSchema(db) {
   for (const sql of SCHEMA_SQL.split(";").map((part) => part.trim()).filter(Boolean)) {
     await db.prepare(sql).run();
   }
+  const info = await db.prepare("PRAGMA table_info(layouts)").all();
+  const names = new Set((info.results || []).map((column) => column.name));
+  if (!names.has("user_sub")) {
+    await db.prepare("ALTER TABLE layouts ADD COLUMN user_sub TEXT NOT NULL DEFAULT ''").run();
+  }
+  await db.prepare(
+    "CREATE INDEX IF NOT EXISTS layouts_by_user ON layouts (user_sub, updated_at DESC, id)",
+  ).run();
 }
 
 export function normalizeLayoutInput(body) {
@@ -48,31 +56,33 @@ export function normalizeLayoutInput(body) {
   };
 }
 
-export async function listLayouts(db) {
+export async function listLayouts(db, userSub) {
   const { results } = await db.prepare(
     `SELECT id, title, width, height, created_at, updated_at
      FROM layouts
+     WHERE user_sub = ?
      ORDER BY updated_at DESC, id ASC
      LIMIT 200`,
-  ).all();
+  ).bind(userSub).all();
   return results.map(summaryFromRow);
 }
 
-export async function getLayoutById(db, id) {
+export async function getLayoutById(db, userSub, id) {
   const row = await db.prepare(
     `SELECT id, title, width, height, walls_json, objects_json, marks_json, characters_json, created_at, updated_at
-     FROM layouts WHERE id = ?`,
-  ).bind(id).first();
+     FROM layouts WHERE id = ? AND user_sub = ?`,
+  ).bind(id, userSub).first();
   return row ? layoutFromRow(row) : null;
 }
 
-export async function insertLayout(db, id, value, now) {
+export async function insertLayout(db, userSub, id, value, now) {
   await db.prepare(
     `INSERT INTO layouts (
-       id, title, width, height, walls_json, objects_json, marks_json, characters_json, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       id, user_sub, title, width, height, walls_json, objects_json, marks_json, characters_json, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id,
+    userSub,
     value.title,
     value.width,
     value.height,
@@ -83,16 +93,16 @@ export async function insertLayout(db, id, value, now) {
     now,
     now,
   ).run();
-  return getLayoutById(db, id);
+  return getLayoutById(db, userSub, id);
 }
 
-export async function updateLayout(db, id, value, now) {
-  const existing = await getLayoutById(db, id);
+export async function updateLayout(db, userSub, id, value, now) {
+  const existing = await getLayoutById(db, userSub, id);
   if (!existing) return null;
   await db.prepare(
     `UPDATE layouts
      SET title = ?, width = ?, height = ?, walls_json = ?, objects_json = ?, marks_json = ?, characters_json = ?, updated_at = ?
-     WHERE id = ?`,
+     WHERE id = ? AND user_sub = ?`,
   ).bind(
     value.title,
     value.width,
@@ -103,14 +113,15 @@ export async function updateLayout(db, id, value, now) {
     JSON.stringify(value.characters),
     now,
     id,
+    userSub,
   ).run();
-  return getLayoutById(db, id);
+  return getLayoutById(db, userSub, id);
 }
 
-export async function deleteLayoutById(db, id) {
-  const existing = await getLayoutById(db, id);
+export async function deleteLayoutById(db, userSub, id) {
+  const existing = await getLayoutById(db, userSub, id);
   if (!existing) return false;
-  await db.prepare("DELETE FROM layouts WHERE id = ?").bind(id).run();
+  await db.prepare("DELETE FROM layouts WHERE id = ? AND user_sub = ?").bind(id, userSub).run();
   return true;
 }
 
