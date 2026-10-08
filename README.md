@@ -4,9 +4,9 @@ A browser grid for working [Murdoku](https://murdoku.com) puzzles with the same 
 
 The app is a Cloudflare Worker. Static files are Workers assets, and saved layouts live in a D1 database named `murdoku-layouts`. There is no puzzle catalog in this repo — you draw or load your own layouts.
 
-**App:** https://murdoku-grid.mocholate.workers.dev
+**App, after deploy:** https://murdoku-grid.mocholate.workers.dev
 
-GitHub Pages (`https://laukim.github.io/murdoku-grid/`) stops once the GitHub repo is private. That is expected; Cloudflare is the host.
+GitHub Pages (`https://laukim.github.io/murdoku-grid/`) stops once the GitHub repo is private. That is expected; Cloudflare is the host. The Worker is not published yet — the deploy steps below create it. The D1 database and empty `layouts` table are already in the account.
 
 ## What it does
 
@@ -110,7 +110,9 @@ The D1 database already exists in the Cloudflare account:
 - name: `murdoku-layouts`
 - id: `99a3ebdf-139e-4421-8736-fa32f9d261d8`
 
-That id is in `wrangler.jsonc`. From a machine logged in with `npx wrangler login` (or `CLOUDFLARE_API_TOKEN`):
+That id is in `wrangler.jsonc`. `layouts` is already created there, so the migration’s `CREATE TABLE IF NOT EXISTS` is safe and records Wrangler’s migration history.
+
+This environment could not finish `wrangler deploy`: there is no Wrangler API token, and the assets upload session token cannot be attached from here. From a machine logged in with `npx wrangler login` (or `CLOUDFLARE_API_TOKEN`):
 
 ```bash
 npm install
