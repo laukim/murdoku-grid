@@ -33,7 +33,7 @@
       flex-wrap: wrap;
       gap: 0.75rem;
       align-items: end;
-      margin-bottom: 1.25rem;
+      margin-bottom: 0.75rem;
       padding: 1rem;
       background: #fff;
       border: 1px solid #ddd;
@@ -85,6 +85,63 @@
       color: #fff;
       border-color: #2563eb;
     }
+
+    .layouts {
+      margin-bottom: 1.25rem;
+      padding: 1rem;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+    }
+
+    .layouts h2 {
+      margin: 0 0 0.35rem;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #666;
+    }
+
+    .layouts-row,
+    .layouts-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: end;
+    }
+
+    .layouts-actions {
+      margin-top: 0.75rem;
+      align-items: center;
+    }
+
+    .layouts select {
+      min-width: 16rem;
+      max-width: 100%;
+      padding: 0.4rem 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 0.95rem;
+      background: #fff;
+    }
+
+    .layouts-check {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.85rem;
+      color: #444;
+    }
+
+    .layouts-status {
+      min-height: 1.2em;
+      margin: 0.6rem 0 0;
+      font-size: 0.85rem;
+      color: #555;
+    }
+
+    .layouts-status.error { color: #b91c1c; }
+    .layouts-status.ok { color: #166534; }
 
     .workspace {
       display: none;
@@ -573,6 +630,36 @@
     <button class="primary" id="createBtn">Create grid</button>
   </div>
 
+  <section class="layouts" id="layoutsPanel">
+    <h2>Saved layouts</h2>
+    <p class="sidebar-note">Rooms, furniture, and obstacles stay in the database. Load one, then keep marking.</p>
+    <div class="layouts-row">
+      <div class="field">
+        <label for="accessKey">Access key</label>
+        <input id="accessKey" type="password" autocomplete="current-password" placeholder="Shared secret">
+      </div>
+      <div class="field">
+        <label for="layoutTitle">Title</label>
+        <input id="layoutTitle" class="wide" type="text" maxlength="80" placeholder="e.g. Manor study">
+      </div>
+    </div>
+    <div class="layouts-actions">
+      <button type="button" id="saveLayoutBtn">Save current</button>
+      <button type="button" id="updateLayoutBtn">Update saved</button>
+      <label class="layouts-check">
+        <input id="includeMarks" type="checkbox" checked>
+        Save pencil marks and placements
+      </label>
+      <select id="layoutSelect">
+        <option value="">Saved layouts…</option>
+      </select>
+      <button type="button" id="loadLayoutBtn">Load</button>
+      <button type="button" id="refreshLayoutsBtn">Refresh</button>
+      <button type="button" id="deleteLayoutBtn">Delete</button>
+    </div>
+    <p class="layouts-status" id="layoutsStatus"></p>
+  </section>
+
   <div class="workspace" id="workspace">
     <aside class="sidebar">
       <h2>Characters</h2>
@@ -775,6 +862,10 @@
     let history = [];
     /** @type {Set<string>} keys like "h,r,c" or "v,r,c" */
     let roomEdges = new Set();
+    /** @type {string|null} D1 id of the layout last loaded or saved */
+    let loadedLayoutId = null;
+    const ACCESS_KEY_STORAGE = 'murdoku-grid.access-key';
+    let layoutsQueue = Promise.resolve();
 
     const els = {
       rows: document.getElementById('rows'),
@@ -793,6 +884,16 @@
       colLabels: document.getElementById('colLabels'),
       undoBtn: document.getElementById('undoBtn'),
       clearBtn: document.getElementById('clearBtn'),
+      accessKey: document.getElementById('accessKey'),
+      layoutTitle: document.getElementById('layoutTitle'),
+      includeMarks: document.getElementById('includeMarks'),
+      layoutSelect: document.getElementById('layoutSelect'),
+      saveLayoutBtn: document.getElementById('saveLayoutBtn'),
+      updateLayoutBtn: document.getElementById('updateLayoutBtn'),
+      loadLayoutBtn: document.getElementById('loadLayoutBtn'),
+      refreshLayoutsBtn: document.getElementById('refreshLayoutsBtn'),
+      deleteLayoutBtn: document.getElementById('deleteLayoutBtn'),
+      layoutsStatus: document.getElementById('layoutsStatus'),
     };
 
     function snapshotState() {
@@ -1164,9 +1265,10 @@
       board[r][c].confirmed = null;
     }
 
-    function ensureGestureHistory() {
+    function ensureGestureHistory(before) {
       if (!gesture || gesture.historyPushed) return;
-      pushHistory();
+      history.push(before);
+      if (history.length > 100) history.shift();
       gesture.historyPushed = true;
     }
 
@@ -1638,8 +1740,9 @@
       const key = cellKey(r, c);
       if (gesture.visited.has(key)) return;
       gesture.visited.add(key);
+      const before = gesture.historyPushed ? null : snapshotState();
       if (applyCellAction(r, c, dragActionForMode())) {
-        ensureGestureHistory();
+        ensureGestureHistory(before);
         if (mode === 'map') refreshFeatureNeighborhood(r, c);
         else refreshCell(r, c);
       }
@@ -1741,15 +1844,17 @@
       if (wasDragging) {
         changed = gesture.historyPushed;
       } else if (gesture.longPressReady && mode === 'pencil') {
+        const before = snapshotState();
         if (applyCellAction(startR, startC, 'place')) {
-          ensureGestureHistory();
+          ensureGestureHistory(before);
           changed = true;
           refreshAction = 'place';
         }
       } else {
         refreshAction = tapActionForMode();
+        const before = snapshotState();
         if (applyCellAction(startR, startC, refreshAction)) {
-          ensureGestureHistory();
+          ensureGestureHistory(before);
           changed = true;
         }
       }
@@ -1889,7 +1994,153 @@
       history = [];
       selectedChar = 0;
       mode = 'pencil';
+      loadedLayoutId = null;
 
+      els.workspace.classList.add('visible');
+      renderAxisLabels();
+      renderCharList();
+      renderMapPickers();
+      renderGrid();
+      setMode('pencil');
+      setLayoutStatus('New grid. Save current to store it.');
+      requestAnimationFrame(updateCellSize);
+    }
+
+    function accessKey() {
+      return els.accessKey.value.trim();
+    }
+
+    function storeAccessKey() {
+      try {
+        const key = accessKey();
+        if (key) localStorage.setItem(ACCESS_KEY_STORAGE, key);
+        else localStorage.removeItem(ACCESS_KEY_STORAGE);
+      } catch {
+        // Private browsing can block storage; the field still works for this tab.
+      }
+    }
+
+    function setLayoutStatus(message, kind) {
+      els.layoutsStatus.textContent = message;
+      els.layoutsStatus.classList.remove('error', 'ok');
+      if (kind) els.layoutsStatus.classList.add(kind);
+    }
+
+    async function api(path, { method = 'GET', body } = {}) {
+      const key = accessKey();
+      if (!key) throw new Error('Enter the access key first.');
+      let response;
+      try {
+        response = await fetch(path, {
+          method,
+          headers: {
+            authorization: `Bearer ${key}`,
+            ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+          },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        });
+      } catch {
+        throw new Error('Could not reach the layouts API.');
+      }
+      const text = await response.text();
+      let payload = null;
+      if (text) {
+        try { payload = JSON.parse(text); } catch { payload = null; }
+      }
+      if (!response.ok) throw new Error(payload?.error || `Request failed (${response.status})`);
+      return payload || {};
+    }
+
+    function currentLayoutPayload() {
+      const objects = [];
+      const marks = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = board[r][c];
+          if (cell.feature) objects.push({ r, c, id: cell.feature });
+          const pencil = [...cell.pencil].sort((a, b) => a - b);
+          if (cell.confirmed !== null || cell.blocked || pencil.length) {
+            marks.push({
+              r,
+              c,
+              confirmed: cell.confirmed,
+              blocked: cell.blocked,
+              pencil: cell.confirmed !== null || cell.blocked ? [] : pencil,
+            });
+          }
+        }
+      }
+      return {
+        title: els.layoutTitle.value.trim(),
+        width: cols,
+        height: rows,
+        characters: characters.slice(),
+        walls: [...roomEdges].sort(),
+        objects,
+        marks: els.includeMarks.checked ? marks : [],
+      };
+    }
+
+    function fillLayoutSelect(layouts) {
+      const previous = els.layoutSelect.value;
+      els.layoutSelect.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = layouts.length ? 'Choose a saved layout…' : 'No saved layouts yet';
+      els.layoutSelect.appendChild(placeholder);
+      for (const layout of layouts) {
+        const option = document.createElement('option');
+        option.value = layout.id;
+        const when = layout.updated_at ? layout.updated_at.slice(0, 16).replace('T', ' ') : '';
+        option.textContent = `${layout.title} (${layout.width}×${layout.height}${when ? `, ${when}` : ''})`;
+        els.layoutSelect.appendChild(option);
+      }
+      const prefer = loadedLayoutId && [...els.layoutSelect.options].some(option => option.value === loadedLayoutId)
+        ? loadedLayoutId
+        : previous;
+      if ([...els.layoutSelect.options].some(option => option.value === prefer)) {
+        els.layoutSelect.value = prefer;
+      }
+    }
+
+    async function refreshLayouts(silent) {
+      if (!accessKey()) {
+        fillLayoutSelect([]);
+        if (!silent) setLayoutStatus('Enter the access key to load saved layouts.');
+        return;
+      }
+      const { layouts } = await api('/api/layouts');
+      const list = layouts || [];
+      fillLayoutSelect(list);
+      if (!silent) {
+        setLayoutStatus(list.length ? `${list.length} saved layout${list.length === 1 ? '' : 's'}.` : 'No saved layouts yet.', 'ok');
+      }
+    }
+
+    function applySavedLayout(layout) {
+      rows = layout.height;
+      cols = layout.width;
+      els.rows.value = String(rows);
+      els.cols.value = String(cols);
+      characters = (layout.characters || []).slice();
+      els.labels.value = characters.join(', ');
+      board = createEmptyBoard(rows, cols);
+      for (const obj of layout.objects || []) {
+        if (board[obj.r] && board[obj.r][obj.c]) board[obj.r][obj.c].feature = obj.id;
+      }
+      for (const mark of layout.marks || []) {
+        const cell = board[mark.r] && board[mark.r][mark.c];
+        if (!cell) continue;
+        cell.confirmed = mark.confirmed ?? null;
+        cell.blocked = !!mark.blocked;
+        cell.pencil = new Set(mark.pencil || []);
+      }
+      roomEdges = new Set(layout.walls || []);
+      history = [];
+      selectedChar = 0;
+      mode = 'pencil';
+      loadedLayoutId = layout.id;
+      els.layoutTitle.value = layout.title || '';
       els.workspace.classList.add('visible');
       renderAxisLabels();
       renderCharList();
@@ -1899,10 +2150,71 @@
       requestAnimationFrame(updateCellSize);
     }
 
+    async function saveLayout() {
+      if (!gridReady()) throw new Error('Create or load a grid before saving.');
+      const payload = currentLayoutPayload();
+      if (!payload.title) throw new Error('Give the layout a title.');
+      const { layout } = await api('/api/layouts', { method: 'POST', body: payload });
+      loadedLayoutId = layout.id;
+      await refreshLayouts(true);
+      setLayoutStatus(`Saved "${layout.title}".`, 'ok');
+    }
+
+    async function updateSavedLayout() {
+      if (!gridReady()) throw new Error('Create or load a grid before updating.');
+      if (!loadedLayoutId) throw new Error('Load a layout before updating it. Save current stores a new one.');
+      const payload = currentLayoutPayload();
+      if (!payload.title) throw new Error('Give the layout a title.');
+      const { layout } = await api(`/api/layouts/${loadedLayoutId}`, { method: 'PUT', body: payload });
+      loadedLayoutId = layout.id;
+      await refreshLayouts(true);
+      setLayoutStatus(`Updated "${layout.title}".`, 'ok');
+    }
+
+    async function loadSelectedLayout() {
+      const id = els.layoutSelect.value;
+      if (!id) throw new Error('Choose a saved layout to load.');
+      const { layout } = await api(`/api/layouts/${id}`);
+      applySavedLayout(layout);
+      setLayoutStatus(`Loaded "${layout.title}". Place obstacles or marks, then update.`, 'ok');
+    }
+
+    async function deleteSelectedLayout() {
+      const id = els.layoutSelect.value || loadedLayoutId;
+      if (!id) throw new Error('Choose a saved layout to delete.');
+      const label = els.layoutSelect.selectedOptions[0]?.textContent || 'this layout';
+      if (!confirm(`Delete ${label}?`)) return;
+      await api(`/api/layouts/${id}`, { method: 'DELETE' });
+      if (loadedLayoutId === id) loadedLayoutId = null;
+      await refreshLayouts(true);
+      setLayoutStatus('Deleted the saved layout.', 'ok');
+    }
+
+    function withLayouts(fn) {
+      layoutsQueue = layoutsQueue
+        .then(() => fn())
+        .catch(err => setLayoutStatus(err instanceof Error ? err.message : 'Request failed', 'error'));
+    }
+
     els.rows.addEventListener('input', () => {
       els.cols.value = els.rows.value;
     });
     els.createBtn.addEventListener('click', initGrid);
+    els.accessKey.addEventListener('change', () => {
+      storeAccessKey();
+      withLayouts(() => refreshLayouts(true));
+    });
+    els.saveLayoutBtn.addEventListener('click', () => withLayouts(saveLayout));
+    els.updateLayoutBtn.addEventListener('click', () => withLayouts(updateSavedLayout));
+    els.loadLayoutBtn.addEventListener('click', () => withLayouts(loadSelectedLayout));
+    els.refreshLayoutsBtn.addEventListener('click', () => withLayouts(() => refreshLayouts()));
+    els.deleteLayoutBtn.addEventListener('click', () => withLayouts(deleteSelectedLayout));
+    try {
+      els.accessKey.value = localStorage.getItem(ACCESS_KEY_STORAGE) || '';
+    } catch {
+      els.accessKey.value = '';
+    }
+    if (els.accessKey.value) withLayouts(() => refreshLayouts(true));
     els.undoBtn.addEventListener('click', undo);
     els.clearBtn.addEventListener('click', () => {
       if (!confirm('Clear all marks and placements?')) return;
@@ -1933,7 +2245,7 @@
 
     document.addEventListener('keydown', (e) => {
       if (!gridReady()) return;
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
 
       if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();

@@ -1,0 +1,3 @@
+# Copy to .dev.vars for `npx wrangler dev`. Do not commit .dev.vars.
+# Use a long random string. The browser sends the same value as Authorization: Bearer.
+LAYOUT_KEY=replace-with-a-long-random-string

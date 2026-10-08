@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "murdoku-grid",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-10-08",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "murdoku-layouts",
+      "database_id": "99a3ebdf-139e-4421-8736-fa32f9d261d8",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
