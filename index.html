@@ -699,7 +699,7 @@
         Save pencil marks and placements
       </label>
       <select id="layoutSelect">
-        <option value="">Saved layouts…</option>
+        <option value="">Sign in to see saved layouts</option>
       </select>
       <button type="button" id="loadLayoutBtn">Load</button>
       <button type="button" id="refreshLayoutsBtn">Refresh</button>
@@ -2093,6 +2093,7 @@
       els.accountEmail.hidden = true;
       els.accountEmail.textContent = '';
       els.signOutBtn.hidden = true;
+      fillLayoutSelect([]);
     }
 
     function paintSignedIn(email) {
@@ -2115,7 +2116,6 @@
         // Google Identity Services may not have loaded.
       }
       paintSignedOut();
-      fillLayoutSelect([]);
     }
 
     function loadGisScript() {
