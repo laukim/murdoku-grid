@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
 import { basename, extname } from "node:path";
-import { importPlaygroundLayout, layoutInsertSql } from "../layout-import.js";
+import { importBoardSource, layoutInsertSql } from "../layout-import.js";
 
 const args = process.argv.slice(2);
 if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
   console.log(`Usage: node scripts/import-layout.mjs <file.json> [--title name] [--sql] [--post url] [--key secret]
 
-Reads a local layout JSON file (room map or wall segments) and prints the
-grid-helper layout. --sql prints a D1 INSERT. --post sends it to a Worker
-/api/layouts endpoint. This command does not download remote catalogs.`);
+Reads a local layout file (room-map JSON, thick-edge JSON, or pasted board
+HTML) and prints the grid-helper layout. --sql prints a D1 INSERT. --post
+sends it to a Worker /api/layouts endpoint. This command does not download
+remote catalogs.`);
   process.exit(args.length === 0 ? 1 : 0);
 }
 
@@ -42,17 +43,11 @@ if (postUrl && !key) {
 
 const text = readFileSync(file, "utf8");
 if (text.length > 1_000_000) fail("That file is too large.");
-let parsed;
-try {
-  parsed = JSON.parse(text);
-} catch {
-  fail("That file is not valid JSON.");
-}
 
 const fallbackTitle = basename(file, extname(file)).replace(/[-_]+/g, " ").trim();
 let layout;
 try {
-  layout = importPlaygroundLayout(parsed, {
+  layout = importBoardSource(text, {
     title: titleFlag || undefined,
     fallbackTitle,
   });

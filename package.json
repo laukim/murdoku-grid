@@ -8,7 +8,7 @@
     "dev:local": "node --disable-warning=ExperimentalWarning scripts/dev-server.mjs",
     "deploy": "wrangler deploy",
     "db:migrate": "wrangler d1 migrations apply murdoku-layouts --remote",
-    "test": "node --disable-warning=ExperimentalWarning scripts/test-layouts.mjs && node scripts/test-import.mjs",
+    "test": "node --disable-warning=ExperimentalWarning scripts/test-layouts.mjs && node scripts/test-import.mjs && node scripts/test-board.mjs",
     "import:layout": "node scripts/import-layout.mjs"
   },
   "devDependencies": {

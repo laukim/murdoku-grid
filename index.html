@@ -140,6 +140,28 @@
       color: #555;
     }
 
+    .layouts-paste {
+      margin-top: 0.75rem;
+    }
+
+    .layouts-paste label {
+      display: block;
+      font-size: 0.8rem;
+      color: #555;
+      font-weight: 500;
+      margin-bottom: 0.25rem;
+    }
+
+    .layouts textarea {
+      width: 100%;
+      min-height: 6.5rem;
+      padding: 0.45rem 0.5rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font: 0.82rem/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      resize: vertical;
+    }
+
     .layouts-status.error { color: #b91c1c; }
     .layouts-status.ok { color: #166534; }
 
@@ -206,6 +228,10 @@
       font-size: 0.72rem;
       color: #888;
       margin: -0.25rem 0 0.5rem;
+    }
+
+    .layouts .sidebar-note code {
+      font-size: 0.68rem;
     }
 
     .map-item-btn {
@@ -632,7 +658,11 @@
 
   <section class="layouts" id="layoutsPanel">
     <h2>Saved layouts</h2>
-    <p class="sidebar-note">Import a JSON room map or wall file, or load a saved layout. Then add obstacles and marks, and save.</p>
+    <p class="sidebar-note">Paste one playground board, or import a JSON room map. Thick lines (~10px, not the outer border) become room walls. <code>board-cell-crossed</code> cells become obstacles. Then mark and save.</p>
+    <div class="layouts-paste">
+      <label for="boardPaste">Paste playground board</label>
+      <textarea id="boardPaste" rows="5" spellcheck="false" placeholder="Paste one board’s HTML, or { &quot;width&quot;: 6, &quot;height&quot;: 6, &quot;thickH&quot;: [3], &quot;thickV&quot;: [3], &quot;crossed&quot;: [5, 18] }"></textarea>
+    </div>
     <div class="layouts-row">
       <div class="field">
         <label for="accessKey">Access key</label>
@@ -644,8 +674,9 @@
       </div>
     </div>
     <div class="layouts-actions">
+      <button type="button" id="convertPasteBtn">Convert paste</button>
       <button type="button" id="importLayoutBtn">Import JSON</button>
-      <input id="importLayoutFile" type="file" accept="application/json,.json" hidden>
+      <input id="importLayoutFile" type="file" accept="application/json,.json,text/html,.html" hidden>
       <button type="button" id="saveLayoutBtn">Save current</button>
       <button type="button" id="updateLayoutBtn">Update saved</button>
       <label class="layouts-check">
@@ -890,6 +921,8 @@
       layoutTitle: document.getElementById('layoutTitle'),
       includeMarks: document.getElementById('includeMarks'),
       layoutSelect: document.getElementById('layoutSelect'),
+      boardPaste: document.getElementById('boardPaste'),
+      convertPasteBtn: document.getElementById('convertPasteBtn'),
       importLayoutBtn: document.getElementById('importLayoutBtn'),
       importLayoutFile: document.getElementById('importLayoutFile'),
       saveLayoutBtn: document.getElementById('saveLayoutBtn'),
@@ -2197,31 +2230,37 @@
       setLayoutStatus('Deleted the saved layout.', 'ok');
     }
 
-    async function importLayoutFromFile(file) {
-      const text = await file.text();
-      if (text.length > 1000000) throw new Error('That file is too large.');
-      let parsed;
+    async function loadImporter() {
       try {
-        parsed = JSON.parse(text);
-      } catch {
-        throw new Error('That file is not valid JSON.');
-      }
-      const fallbackTitle = file.name.replace(/\.json$/i, '').replace(/[-_]+/g, ' ').trim();
-      let importPlaygroundLayout;
-      try {
-        ({ importPlaygroundLayout } = await import('./layout-import.js'));
+        return await import('./layout-import.js');
       } catch {
         throw new Error('Could not load the layout importer.');
       }
-      const layout = importPlaygroundLayout(parsed, { fallbackTitle });
+    }
+
+    function showImportedLayout(layout) {
       applySavedLayout(layout);
       const wallCount = layout.walls.length;
       const objectCount = layout.objects.length;
       const objectNote = objectCount ? `, ${objectCount} object${objectCount === 1 ? '' : 's'}` : '';
       setLayoutStatus(
-        `Imported "${layout.title}" (${layout.width}×${layout.height}, ${wallCount} wall${wallCount === 1 ? '' : 's'}${objectNote}). Add obstacles or marks, then Save current.`,
+        `Imported "${layout.title}" (${layout.width}×${layout.height}, ${wallCount} wall${wallCount === 1 ? '' : 's'}${objectNote}). Add marks, then Save current.`,
         'ok',
       );
+    }
+
+    async function importLayoutFromFile(file) {
+      const text = await file.text();
+      if (text.length > 1000000) throw new Error('That file is too large.');
+      const fallbackTitle = file.name.replace(/\.(json|html?)$/i, '').replace(/[-_]+/g, ' ').trim();
+      const { importBoardSource } = await loadImporter();
+      showImportedLayout(importBoardSource(text, { fallbackTitle }));
+    }
+
+    async function convertPastedBoard() {
+      const fallbackTitle = els.layoutTitle.value.trim() || 'Pasted board';
+      const { importBoardSource } = await loadImporter();
+      showImportedLayout(importBoardSource(els.boardPaste.value, { fallbackTitle }));
     }
 
     function withLayouts(fn) {
@@ -2238,6 +2277,7 @@
       storeAccessKey();
       withLayouts(() => refreshLayouts(true));
     });
+    els.convertPasteBtn.addEventListener('click', () => withLayouts(convertPastedBoard));
     els.importLayoutBtn.addEventListener('click', () => els.importLayoutFile.click());
     els.importLayoutFile.addEventListener('change', () => {
       const file = els.importLayoutFile.files && els.importLayoutFile.files[0];

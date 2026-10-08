@@ -105,7 +105,30 @@ node scripts/import-layout.mjs ./my-layout.json \
   --key "$LAYOUT_KEY"
 ```
 
-`--title` replaces the title in the file. The command rejects an `http://` or `https://` path.
+`--title` replaces the title in the file. The command rejects an `http://` or `https://` path. The same command accepts a pasted board saved as a local `.html` file.
+
+## Playground board paste
+
+Paste one board at a time into **Paste playground board**, then **Convert paste**. The grid draws the rooms. Add marks with the existing tools and **Save current** to store it in D1. This does not fetch the playground site.
+
+Two inputs convert to the same `h,r,c` / `v,r,c` walls:
+
+**Board HTML.** Cells are `board-cell` elements in row-major order. `board-cell-crossed` becomes an obstacle (`other`, unless the cell has `data-object`). A line is thick when its `--line-thickness` is about 10px (8px or more). The outer border is thick too and is not a room wall. Paste every line in order, including the thin ones, or mark internal lines with `data-after-row` / `data-after-col` (1-based). `data-cols` and `data-rows` set the size when the cell count is not a square.
+
+**Compact JSON.** `thickH` and `thickV` are 1-based: the line after that row or column, across the whole board. `crossed` indexes are 0-based and row-major. `examples/four-rooms.json` is the 6×6 case with four 3×3 rooms:
+
+```json
+{
+  "title": "Four rooms",
+  "width": 6,
+  "height": 6,
+  "thickH": [3],
+  "thickV": [3],
+  "crossed": [5, 18, 23, 26, 29, 30]
+}
+```
+
+After row 3 is `h,2,0` … `h,2,5`. After column 3 is `v,0,2` … `v,5,2`. The crossed indexes land on `(0,5)`, `(3,0)`, `(3,5)`, `(4,2)`, `(4,5)`, and `(5,0)` as `other` obstacles. A later save can replace `other` with a tree, table, or any other object.
 
 ## Schema
 

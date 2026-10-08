@@ -1,3 +1,5 @@
+import { parseBoardPaste } from "./board-convert.js";
+
 /**
  * Convert a local playground-style layout file into the grid helper's
  * saved-layout shape (width, height, wall segments, optional objects).
@@ -26,6 +28,10 @@ export const KNOWN_OBJECT_IDS = [
 const MAX_TITLE = 80;
 const MAX_LABEL = 40;
 const FEATURE_ID = /^[a-z0-9][a-z0-9-]{0,40}$/;
+
+export function importBoardSource(text, options = {}) {
+  return importPlaygroundLayout(parseBoardPaste(text), options);
+}
 
 export function importPlaygroundLayout(input, options = {}) {
   const source = unwrap(input);

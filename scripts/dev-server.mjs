@@ -7,6 +7,7 @@ const port = Number(process.env.PORT || 8787);
 const key = process.env.LAYOUT_KEY || "local-dev-key";
 const htmlPath = new URL("../index.html", import.meta.url);
 const importerPath = new URL("../layout-import.js", import.meta.url);
+const boardConverterPath = new URL("../board-convert.js", import.meta.url);
 const env = { DB: new LocalD1(), LAYOUT_KEY: key };
 
 const server = createServer(async (req, res) => {
@@ -43,6 +44,12 @@ const server = createServer(async (req, res) => {
   if (url.pathname === "/layout-import.js") {
     res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
     res.end(readFileSync(importerPath));
+    return;
+  }
+
+  if (url.pathname === "/board-convert.js") {
+    res.writeHead(200, { "content-type": "text/javascript; charset=utf-8" });
+    res.end(readFileSync(boardConverterPath));
     return;
   }
 

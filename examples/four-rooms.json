@@ -1,0 +1,8 @@
+{
+  "title": "Four rooms",
+  "width": 6,
+  "height": 6,
+  "thickH": [3],
+  "thickV": [3],
+  "crossed": [5, 18, 23, 26, 29, 30]
+}
