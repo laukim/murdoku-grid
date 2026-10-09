@@ -274,4 +274,38 @@ const deps = { now: clock(), id: ids() };
   assert.equal(listed.body.layouts.filter((layout) => layout.title.startsWith("Batch ")).length, 8);
 }
 
+{
+  for (const title of ["Vol1 #11", "Vol1 #2", "Notes", "Vol1 #5"]) {
+    const created = await call(env, "POST", "/api/layouts", { body: sample({ title }), deps });
+    assert.equal(created.status, 201, created.body?.error);
+  }
+  const listed = await call(env, "GET", "/api/layouts", { deps });
+  const titles = listed.body.layouts
+    .map((layout) => layout.title)
+    .filter((title) => title.startsWith("Vol1 #") || title === "Notes");
+  assert.deepEqual(titles, ["Vol1 #2", "Vol1 #5", "Vol1 #11", "Notes"]);
+
+  const windowed = await call(env, "POST", "/api/layouts", {
+    body: sample({
+      title: "Window study",
+      walls: ["h,0,0", "h,0,1", "v,1,2"],
+      windows: ["h,0,1"],
+      objects: [{ r: 0, c: 0, id: "cash-register" }],
+    }),
+    deps,
+  });
+  assert.equal(windowed.status, 201, windowed.body?.error);
+  assert.deepEqual(windowed.body.layout.walls, ["h,0,0", "v,1,2"]);
+  assert.deepEqual(windowed.body.layout.windows, ["h,0,1"]);
+  assert.deepEqual(windowed.body.layout.objects, [{ r: 0, c: 0, id: "cash-register" }]);
+  const again = await call(env, "GET", `/api/layouts/${windowed.body.layout.id}`, { deps });
+  assert.deepEqual(again.body.layout.windows, ["h,0,1"]);
+
+  const badWindow = await call(env, "POST", "/api/layouts", {
+    body: sample({ title: "Bad window", windows: ["pane"] }),
+    deps,
+  });
+  assert.equal(badWindow.status, 400);
+}
+
 console.log("layouts api tests passed");

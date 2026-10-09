@@ -15,11 +15,11 @@ Set the grid size, then mark the puzzle as you work:
 - **Pencil marks** — click or drag to note which characters could go in a cell
 - **Place a person** — long-press a cell to confirm someone’s position; row and column cross-outs apply automatically
 - **Mark X** — block a whole cell when no one can go there
-- **Obstacles and furniture** — tables, trees, chairs, and the other map objects. Sign in to place or change them
-- **Room walls** — click or drag internal grid lines to draw bold borders between rooms. Sign in to edit walls
+- **Obstacles and furniture** — tables, shelves, cash registers, trees, chairs, and the other map objects. Sign in to place or change them. Unsigned viewers get a legend of those icons instead of the tool buttons.
+- **Room walls and windows** — click an internal edge to cycle wall, window, and open. Drag draws or clears solid walls. A window is a wall with a gap in the middle. Sign in to edit them.
 - **Character colors** — A–Z (and V for the victim) each have their own color
 - **Create grid / Open a board** — set a size, paste a playground board, or import JSON. Sign in to use these
-- **Saved puzzles** — the list of every saved layout is visible without an account. Open one to view the board and keep pencil marks. Sign in to create a grid, open a board, edit walls, furniture, and obstacles, or to save, update, or delete your own.
+- **Saved puzzles** — the list of every saved layout is visible without an account. Titles such as Vol1 #5 come before Vol1 #11. Unsigned visitors see the title only. Sign in to create a grid, open a board, edit walls, windows, furniture, and obstacles, or to save, update, or delete your own.
 
 Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
 
@@ -27,7 +27,7 @@ Clear all removes pencil marks, placements, and X cells. Room walls and objects 
 
 ## Auth
 
-Anyone can list and open saved puzzles. Without Google sign-in the page is load-and-view: Create grid, Open a board, and the wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work. Save, update, and delete need Google sign-in. A new puzzle is stored under that token’s `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`.
+Anyone can list and open saved puzzles. Without Google sign-in the page is load-and-view: the library is a row of titles, the board sits in front, and a legend shows furniture and obstacle icons. Create grid, Open a board, and the wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work. Save, update, and delete need Google sign-in. A new puzzle is stored under that token’s `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`. The list puts numbered titles first, in numeric order, then other titles newest first.
 
 The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`).
 
@@ -59,13 +59,15 @@ This repo cannot change the Google Cloud console. Add the origin there before th
   "height": 9,
   "characters": ["A", "B", "C", "D", "E", "F", "G", "H", "V"],
   "walls": ["h,0,1", "v,2,3"],
+  "windows": ["h,1,2"],
   "objects": [{ "r": 1, "c": 2, "id": "table" }],
   "marks": [{ "r": 0, "c": 0, "confirmed": null, "blocked": false, "pencil": [0, 1] }]
 }
 ```
 
 - `walls` are internal borders. `h,r,c` is the horizontal line under row `r` at column `c`. `v,r,c` is the vertical line to the right of column `c` in row `r`.
-- `objects` is optional. Each entry is a furniture or obstacle id on a cell (`table`, `tree`, `chair`, …). An empty array is a room-only layout; load it and add objects later. Object ids are lowercase slugs, so new kinds can be stored without a schema change.
+- `windows` uses the same keys. A window is drawn with a gap and is not also stored as a solid wall. Omit it, or send `[]`, when the board has none.
+- `objects` is optional. Each entry is a furniture or obstacle id on a cell (`table`, `tree`, `chair`, `cash-register`, …). An empty array is a room-only layout; load it and add objects later. Object ids are lowercase slugs, so new kinds can be stored without a schema change. `register` and `cashRegister` are stored as `cash-register`.
 - `marks` is optional solving state: pencil indexes, a confirmed character index, or an X (`blocked`). Uncheck “Save pencil marks and placements” to store only the rooms and objects.
 
 ## Import a layout file
@@ -91,7 +93,7 @@ A file can describe rooms in any of these ways:
 - `walls`, `wallSegments`, or `edges`: internal borders, with or without a room map. Extra walls are added on top of a map. Each entry can be `"h,r,c"` / `"v,r,c"`, `{ "dir": "h", "r": 0, "c": 1 }`, `{ "from": [0, 0], "to": [0, 1] }`, or `[[0, 0], [1, 0]]`. `h,r,c` is the line under row `r` at column `c`. `v,r,c` is the line to the right of column `c` in row `r`.
 - `width` and `height` (columns and rows, 2–20). Optional when a room map sets the size. A wall-only file needs both.
 
-Optional objects use `obstacles`, `objects`, `features`, or a grid in `obstacleMap` / `objectMap`. A cell is `{ "r": 0, "c": 2, "id": "tree" }` (`row`/`col`/`x`/`y` and `type` work too). In a grid, `""`, `"-"`, and `"."` are empty. Ids drawn by the picker: `chair`, `bed`, `carpet`, `car`, `oil-slick`, `table`, `bookshelf`, `plant`, `tree`, `tv`, `statue`, `other`. Any other lowercase slug is kept so a later pass can still edit that cell; the grid shows it with the generic obstacle icon.
+Optional objects use `obstacles`, `objects`, `features`, or a grid in `obstacleMap` / `objectMap`. A cell is `{ "r": 0, "c": 2, "id": "tree" }` (`row`/`col`/`x`/`y` and `type` work too). In a grid, `""`, `"-"`, and `"."` are empty. Ids drawn by the picker: `chair`, `bed`, `carpet`, `car`, `oil-slick`, `table`, `bookshelf`, `cash-register`, `plant`, `tree`, `tv`, `statue`, `other`. Any other lowercase slug is kept so a later pass can still edit that cell; the grid shows it with the generic obstacle icon. `windows` uses the same `h,r,c` / `v,r,c` keys as walls.
 
 `characters` defaults to `A` … `V` using `min(width, height)` labels, same as Create grid. `marks` uses the saved-layout shape. A character label such as `"A"` is accepted anywhere an index is accepted and stored as an index.
 
@@ -114,7 +116,7 @@ Sign in, then paste one board at a time into **Paste playground board** and choo
 
 Two inputs convert to the same `h,r,c` / `v,r,c` walls:
 
-**Board HTML.** Cells are `board-cell` elements in row-major order. `board-cell-crossed` becomes an obstacle (`other`, unless the cell has `data-object`). A line is thick when its `--line-thickness` is about 10px (8px or more). The outer border is thick too and is not a room wall. Paste every line in order, including the thin ones, or mark internal lines with `data-after-row` / `data-after-col` (1-based). `data-cols` and `data-rows` set the size when the cell count is not a square.
+**Board HTML.** Cells are `board-cell` elements in row-major order. `board-cell-crossed` and `board-cell-special-crossed` become an obstacle (`other`, unless the cell has `data-object`). A line is thick when its `--line-thickness` is about 10px (8px or more). Playground edges are `board-edge-horizontal` / `board-edge-vertical` buttons with `data-testid="edge-h-ROW-COL"` or `edge-v-ROW-COL` (boundary indexes: `edge-h-3-1` is `h,2,1`). `board-edge-fixed` is the outer border and is not a room wall. A `board-object-window` on an edge is stored as a window. Paste every line in order, including the thin ones, or mark internal lines with `data-after-row` / `data-after-col` (1-based). `data-cols` and `data-rows` set the size when the cell count is not a square.
 
 **Compact JSON.** `thickH` and `thickV` are 1-based: the line after that row or column, across the whole board. `crossed` indexes are 0-based and row-major. `examples/four-rooms.json` is the 6×6 case with four 3×3 rooms:
 
@@ -133,19 +135,20 @@ After row 3 is `h,2,0` … `h,2,5`. After column 3 is `v,0,2` … `v,5,2`. The c
 
 ## Schema
 
-`migrations/0001_layouts.sql` creates the table. `migrations/0002_user_sub.sql` adds the owner column:
+`migrations/0001_layouts.sql` creates the table. `migrations/0002_user_sub.sql` adds the owner column. `migrations/0003_windows.sql` adds `windows_json`:
 
 - `id` — text primary key (UUID)
 - `user_sub` — Google account `sub` that owns the row
 - `title` — name
 - `width`, `height` — columns and rows
 - `walls_json` — room borders
+- `windows_json` — window edges, same keys as walls
 - `objects_json` — furniture and obstacles; safe to update on a later save
 - `marks_json` — pencil marks, placements, and X cells
 - `characters_json` — labels, which also drive the colors
 - `created_at`, `updated_at` — ISO-8601 timestamps
 
-`0002` is a plain `ALTER TABLE`. Run it once with `npm run db:migrate` before deploying the Worker that expects `user_sub`. If migrate reports a duplicate column, the column is already present; continue with `npm run deploy`. The Worker also adds the column when it is missing, so a database created only by the first migration still opens.
+`0002` and `0003` are plain `ALTER TABLE` statements. Run them once with `npm run db:migrate` before deploying the Worker that expects `user_sub` and `windows_json`. If migrate reports a duplicate column, the column is already present; continue with `npm run deploy`. The Worker also adds a missing column when it opens, so a database created by an earlier migration still loads.
 
 ## Local
 

@@ -18,6 +18,7 @@ export const KNOWN_OBJECT_IDS = [
   "oil-slick",
   "table",
   "bookshelf",
+  "cash-register",
   "plant",
   "tree",
   "tv",
@@ -49,8 +50,10 @@ export function importPlaygroundLayout(input, options = {}) {
   const walls = new Set(rooms ? wallsFromZoneMap(rooms.grid, width, height) : []);
   const explicit = readExplicitWalls(source.walls ?? source.wallSegments ?? source.edges, width, height);
   for (const key of explicit) walls.add(key);
+  const windows = new Set(readExplicitWalls(source.windows, width, height, "Windows"));
+  for (const key of windows) walls.delete(key);
   const maxWalls = (height - 1) * width + height * (width - 1);
-  if (walls.size > maxWalls) throw new Error("Too many walls");
+  if (walls.size + windows.size > maxWalls) throw new Error("Too many walls");
 
   const characters = readCharacters(source.characters ?? source.labels, width, height);
   const objects = readObjects(source, width, height);
@@ -62,6 +65,7 @@ export function importPlaygroundLayout(input, options = {}) {
     height,
     characters,
     walls: [...walls].sort(),
+    windows: [...windows].sort(),
     objects,
     marks,
   };
@@ -71,13 +75,14 @@ export function layoutInsertSql(layout, { id, now, userSub = "" } = {}) {
   const layoutId = id || crypto.randomUUID();
   const ts = now || new Date().toISOString();
   return `INSERT INTO layouts (
-  id, title, width, height, walls_json, objects_json, marks_json, characters_json, created_at, updated_at, user_sub
+  id, title, width, height, walls_json, windows_json, objects_json, marks_json, characters_json, created_at, updated_at, user_sub
 ) VALUES (
   ${sqlString(layoutId)},
   ${sqlString(layout.title)},
   ${layout.width},
   ${layout.height},
   ${sqlString(JSON.stringify(layout.walls))},
+  ${sqlString(JSON.stringify(layout.windows || []))},
   ${sqlString(JSON.stringify(layout.objects))},
   ${sqlString(JSON.stringify(layout.marks))},
   ${sqlString(JSON.stringify(layout.characters))},
@@ -201,13 +206,14 @@ function wallsFromZoneMap(grid, width, height) {
   return walls;
 }
 
-function readExplicitWalls(raw, width, height) {
+function readExplicitWalls(raw, width, height, label = "Walls") {
   if (raw == null) return [];
-  if (!Array.isArray(raw)) throw new Error("Walls must be an array");
+  if (!Array.isArray(raw)) throw new Error(`${label} must be an array`);
+  const noun = label === "Windows" ? "Window" : "Wall";
   return raw.map((item) => {
-    if (typeof item === "string") return parseWallKey(item, width, height);
+    if (typeof item === "string") return parseWallKey(item, width, height, noun);
     if (Array.isArray(item) || (item && typeof item === "object")) return wallFromValue(item, width, height);
-    throw new Error("Invalid wall");
+    throw new Error(`Invalid ${noun.toLowerCase()}`);
   });
 }
 
@@ -252,16 +258,16 @@ function wallBetween(a, b, width, height) {
   throw new Error("Wall endpoints must be adjacent cells");
 }
 
-function parseWallKey(key, width, height) {
-  if (typeof key !== "string") throw new Error("Invalid wall");
+function parseWallKey(key, width, height, noun = "Wall") {
+  if (typeof key !== "string") throw new Error(`Invalid ${noun.toLowerCase()}`);
   const match = /^(h|v),(\d+),(\d+)$/.exec(key);
-  if (!match) throw new Error(`Invalid wall "${key}"`);
+  if (!match) throw new Error(`Invalid ${noun.toLowerCase()} "${key}"`);
   const type = match[1];
   const r = Number(match[2]);
   const c = Number(match[3]);
-  if (`${type},${r},${c}` !== key) throw new Error(`Invalid wall "${key}"`);
+  if (`${type},${r},${c}` !== key) throw new Error(`Invalid ${noun.toLowerCase()} "${key}"`);
   const inRange = type === "h" ? r <= height - 2 && c <= width - 1 : r <= height - 1 && c <= width - 2;
-  if (!inRange) throw new Error(`Wall ${key} is outside the grid`);
+  if (!inRange) throw new Error(`${noun} ${key} is outside the grid`);
   return key;
 }
 
@@ -339,6 +345,7 @@ function objectId(raw) {
   if (typeof raw !== "string") throw new Error("Invalid object id");
   const id = raw.trim().toLowerCase().replace(/[\s_]+/g, "-");
   if (!FEATURE_ID.test(id)) throw new Error(`Invalid object id "${raw}"`);
+  if (id === "cashregister" || id === "register") return "cash-register";
   return id;
 }
 

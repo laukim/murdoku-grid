@@ -1,3 +1,4 @@
+import { sortLayouts } from "../layout-order.js";
 import { SCHEMA_SQL } from "./schema.js";
 
 const MAX_TITLE = 80;
@@ -12,6 +13,9 @@ export async function ensureSchema(db) {
   const names = new Set((info.results || []).map((column) => column.name));
   if (!names.has("user_sub")) {
     await db.prepare("ALTER TABLE layouts ADD COLUMN user_sub TEXT NOT NULL DEFAULT ''").run();
+  }
+  if (!names.has("windows_json")) {
+    await db.prepare("ALTER TABLE layouts ADD COLUMN windows_json TEXT NOT NULL DEFAULT '[]'").run();
   }
   await db.prepare(
     "CREATE INDEX IF NOT EXISTS layouts_by_user ON layouts (user_sub, updated_at DESC, id)",
@@ -35,8 +39,12 @@ export function normalizeLayoutInput(body) {
 
   const characters = normalizeCharacters(body.characters);
   if (!characters.ok) return characters;
+  const windows = normalizeWalls(body.windows, width, height, "Window");
+  if (!windows.ok) return windows;
   const walls = normalizeWalls(body.walls, width, height);
   if (!walls.ok) return walls;
+  const windowSet = new Set(windows.value);
+  walls.value = walls.value.filter((key) => !windowSet.has(key));
   const objects = normalizeObjects(body.objects, width, height);
   if (!objects.ok) return objects;
   const marks = normalizeMarks(body.marks, width, height, characters.value.length);
@@ -49,6 +57,7 @@ export function normalizeLayoutInput(body) {
       width,
       height,
       walls: walls.value,
+      windows: windows.value,
       objects: objects.value,
       marks: marks.value,
       characters: characters.value,
@@ -59,15 +68,14 @@ export function normalizeLayoutInput(body) {
 export async function listLayouts(db, viewerSub = "") {
   const { results } = await db.prepare(
     `SELECT id, title, width, height, user_sub, created_at, updated_at
-     FROM layouts
-     ORDER BY updated_at DESC, id ASC`,
+     FROM layouts`,
   ).all();
-  return (results || []).map((row) => withMine(summaryFromRow(row), row, viewerSub));
+  return sortLayouts(results || []).map((row) => withMine(summaryFromRow(row), row, viewerSub));
 }
 
 export async function getPublicLayout(db, id, viewerSub = "") {
   const row = await db.prepare(
-    `SELECT id, title, width, height, walls_json, objects_json, marks_json, characters_json, user_sub, created_at, updated_at
+    `SELECT id, title, width, height, walls_json, windows_json, objects_json, marks_json, characters_json, user_sub, created_at, updated_at
      FROM layouts WHERE id = ?`,
   ).bind(id).first();
   return row ? withMine(layoutFromRow(row), row, viewerSub) : null;
@@ -75,7 +83,7 @@ export async function getPublicLayout(db, id, viewerSub = "") {
 
 export async function getLayoutById(db, userSub, id) {
   const row = await db.prepare(
-    `SELECT id, title, width, height, walls_json, objects_json, marks_json, characters_json, user_sub, created_at, updated_at
+    `SELECT id, title, width, height, walls_json, windows_json, objects_json, marks_json, characters_json, user_sub, created_at, updated_at
      FROM layouts WHERE id = ? AND user_sub = ?`,
   ).bind(id, userSub).first();
   return row ? withMine(layoutFromRow(row), row, userSub) : null;
@@ -84,8 +92,8 @@ export async function getLayoutById(db, userSub, id) {
 export async function insertLayout(db, userSub, id, value, now) {
   await db.prepare(
     `INSERT INTO layouts (
-       id, user_sub, title, width, height, walls_json, objects_json, marks_json, characters_json, created_at, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       id, user_sub, title, width, height, walls_json, windows_json, objects_json, marks_json, characters_json, created_at, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
     id,
     userSub,
@@ -93,6 +101,7 @@ export async function insertLayout(db, userSub, id, value, now) {
     value.width,
     value.height,
     JSON.stringify(value.walls),
+    JSON.stringify(value.windows),
     JSON.stringify(value.objects),
     JSON.stringify(value.marks),
     JSON.stringify(value.characters),
@@ -107,13 +116,14 @@ export async function updateLayout(db, userSub, id, value, now) {
   if (!existing) return null;
   await db.prepare(
     `UPDATE layouts
-     SET title = ?, width = ?, height = ?, walls_json = ?, objects_json = ?, marks_json = ?, characters_json = ?, updated_at = ?
+     SET title = ?, width = ?, height = ?, walls_json = ?, windows_json = ?, objects_json = ?, marks_json = ?, characters_json = ?, updated_at = ?
      WHERE id = ? AND user_sub = ?`,
   ).bind(
     value.title,
     value.width,
     value.height,
     JSON.stringify(value.walls),
+    JSON.stringify(value.windows),
     JSON.stringify(value.objects),
     JSON.stringify(value.marks),
     JSON.stringify(value.characters),
@@ -151,6 +161,7 @@ function layoutFromRow(row) {
   return {
     ...summaryFromRow(row),
     walls: JSON.parse(row.walls_json),
+    windows: JSON.parse(row.windows_json || "[]"),
     objects: JSON.parse(row.objects_json),
     marks: JSON.parse(row.marks_json),
     characters: JSON.parse(row.characters_json),
@@ -173,25 +184,25 @@ function normalizeCharacters(raw) {
   return { ok: true, value };
 }
 
-function normalizeWalls(raw, width, height) {
+function normalizeWalls(raw, width, height, noun = "Wall") {
   if (raw == null) return { ok: true, value: [] };
-  if (!Array.isArray(raw)) return { ok: false, error: "Walls must be an array" };
+  if (!Array.isArray(raw)) return { ok: false, error: `${noun}s must be an array` };
   const max = (height - 1) * width + height * (width - 1);
-  if (raw.length > max) return { ok: false, error: "Too many walls" };
+  if (raw.length > max) return { ok: false, error: `Too many ${noun.toLowerCase()}s` };
 
   const seen = new Set();
   for (const key of raw) {
-    if (typeof key !== "string") return { ok: false, error: "Invalid wall" };
+    if (typeof key !== "string") return { ok: false, error: `Invalid ${noun.toLowerCase()}` };
     const match = /^(h|v),(\d+),(\d+)$/.exec(key);
-    if (!match) return { ok: false, error: "Invalid wall" };
+    if (!match) return { ok: false, error: `Invalid ${noun.toLowerCase()}` };
     const type = match[1];
     const r = Number(match[2]);
     const c = Number(match[3]);
-    if (`${type},${r},${c}` !== key) return { ok: false, error: "Invalid wall" };
+    if (`${type},${r},${c}` !== key) return { ok: false, error: `Invalid ${noun.toLowerCase()}` };
     const inRange = type === "h"
       ? r <= height - 2 && c <= width - 1
       : r <= height - 1 && c <= width - 2;
-    if (!inRange) return { ok: false, error: "Wall is outside the grid" };
+    if (!inRange) return { ok: false, error: `${noun} is outside the grid` };
     seen.add(key);
   }
   return { ok: true, value: [...seen].sort() };

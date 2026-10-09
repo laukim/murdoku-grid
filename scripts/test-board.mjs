@@ -155,6 +155,51 @@ const compact = readFileSync(new URL("../examples/four-rooms.json", import.meta.
   assert.equal(layout.objects[0].id, "tree");
 }
 
+function playgroundShellHtml() {
+  const edges = [];
+  for (let row = 0; row <= 6; row++) {
+    for (let col = 0; col < 6; col++) {
+      const fixed = row === 0 || row === 6;
+      const thick = fixed || row === 3;
+      edges.push(
+        `<button type="button" data-testid="edge-h-${row}-${col}" class="board-edge board-edge-horizontal${fixed ? " board-edge-fixed" : ""}" style="--line-thickness:${thick ? 10 : 3}px"></button>`,
+      );
+    }
+  }
+  for (let row = 0; row < 6; row++) {
+    for (let col = 0; col <= 6; col++) {
+      const fixed = col === 0 || col === 6;
+      const thick = fixed || col === 3;
+      edges.push(
+        `<button type="button" data-testid="edge-v-${row}-${col}" class="board-edge board-edge-vertical${fixed ? " board-edge-fixed" : ""}" style="--line-thickness:${thick ? 10 : 3}px"></button>`,
+      );
+    }
+  }
+  const cells = Array.from({ length: 36 }, (_, index) => {
+    if (index === 5) {
+      return `<button type="button" class="board-cell board-cell-special-crossed"></button>`;
+    }
+    return `<button type="button" class="board-cell"></button>`;
+  }).join("");
+  return `<div class="board-shell" data-cols="6" data-rows="6" data-title="Vol1 #2">
+    <div class="board-edges">${edges.join("")}</div>
+    <div class="board-object board-object-window" style="left:120px;top:270px;width:60px;height:60px;transform:rotate(90deg)"></div>
+    <div class="board-object board-object-window" data-edge="v,0,1"></div>
+    <div class="board-cells">${cells}</div>
+  </div>`;
+}
+
+{
+  const fromPlayground = expectLayout(playgroundShellHtml());
+  assert.equal(fromPlayground.title, "Vol1 #2");
+  const expectedWalls = WALLS.filter((key) => key !== "h,2,1");
+  assert.deepEqual(fromPlayground.walls, expectedWalls);
+  assert.deepEqual(fromPlayground.windows, ["h,2,1", "v,0,1"]);
+  assert.deepEqual(fromPlayground.objects, [{ r: 0, c: 5, id: "other" }]);
+  assert.equal(fromPlayground.walls.includes("h,0,0"), false);
+  assert.equal(fromPlayground.walls.includes("v,0,0"), false);
+}
+
 assert.throws(
   () => importBoardSource(JSON.stringify({ width: 6, height: 6, thickH: [6], crossed: [] })),
   /outer border/,
@@ -169,6 +214,10 @@ const htmlPage = readFileSync(new URL("../index.html", import.meta.url), "utf8")
 assert.match(htmlPage, /id="boardPaste"/);
 assert.match(htmlPage, /id="convertPasteBtn"/);
 assert.match(htmlPage, /board-cell-crossed/);
+assert.match(htmlPage, /id: 'cash-register'/);
+assert.match(htmlPage, /id="mapLegend"/);
+assert.match(htmlPage, /map-legend-item/);
+assert.match(htmlPage, /if \(!canEditLayout\(\)\) return layout\.title/);
 
 function runCli(args) {
   return new Promise((resolve) => {
