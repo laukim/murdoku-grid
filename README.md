@@ -15,11 +15,11 @@ Set the grid size, then mark the puzzle as you work:
 - **Pencil marks** — click or drag to note which characters could go in a cell
 - **Place a person** — long-press a cell to confirm someone’s position; row and column cross-outs apply automatically
 - **Mark X** — block a whole cell when no one can go there
-- **Obstacles and furniture** — tables, trees, chairs, and the other map objects
-- **Room walls** — click or drag internal grid lines to draw bold borders between rooms
+- **Obstacles and furniture** — tables, trees, chairs, and the other map objects. Sign in to place or change them
+- **Room walls** — click or drag internal grid lines to draw bold borders between rooms. Sign in to edit walls
 - **Character colors** — A–Z (and V for the victim) each have their own color
 - **Import JSON** — open a local room map or wall file, draw it, then keep marking
-- **Saved puzzles** — the list of every saved layout is visible without an account. Open one and keep editing walls, rooms, objects, size, paste, and import on this device. Sign in only to save, update, or delete your own.
+- **Saved puzzles** — the list of every saved layout is visible without an account. Open one to view the rooms and objects. Sign in to edit walls, furniture, and obstacles, or to save, update, or delete your own.
 
 Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
 
@@ -27,7 +27,7 @@ Clear all removes pencil marks, placements, and X cells. Room walls and objects 
 
 ## Auth
 
-Anyone can list and open saved puzzles. Save, update, and delete need Google sign-in. A new puzzle is stored under that token’s `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`.
+Anyone can list and open saved puzzles. Without Google sign-in the layout is view-only: wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work. Save, update, and delete need Google sign-in. A new puzzle is stored under that token’s `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`.
 
 The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`).
 

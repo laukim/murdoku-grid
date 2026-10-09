@@ -81,7 +81,11 @@ assert.match(html, /Room walls/);
 assert.match(html, /class="page-columns"/);
 assert.match(html, /function boardHeightBudget/);
 assert.match(html, /viewportBudget/);
-assert.match(html, /keep editing walls, rooms, and objects/);
+assert.match(html, /id="layoutTools" hidden/);
+assert.match(html, /body class="view-only"/);
+assert.match(html, /function canEditLayout/);
+assert.match(html, /Open any saved puzzle to view the rooms and objects/);
+assert.doesNotMatch(html, /keep editing walls, rooms, and objects/);
 assert.doesNotMatch(html, /Expected \$\{n\} labels/);
 
 const db = new LocalD1();
