@@ -2105,7 +2105,7 @@
       renderMapPickers();
       renderGrid();
       setMode('pencil');
-      setImportStatus(currentToken() ? 'New grid. Save current to store it.' : 'New grid.');
+      setImportStatus('New grid.');
       requestAnimationFrame(updateCellSize);
     }
 
@@ -2139,6 +2139,10 @@
       savedLayouts = [];
       renderLayoutList([]);
       setLayoutStatus('');
+      const localNote = els.importStatus.textContent
+        .replace(/\s*Save current stores it with your puzzles\./g, '')
+        .replace(/\s*Save current to store it\./g, '');
+      if (localNote !== els.importStatus.textContent) setImportStatus(localNote.trim());
     }
 
     function paintSignedIn(email) {
@@ -2458,9 +2462,8 @@
       const wallCount = layout.walls.length;
       const objectCount = layout.objects.length;
       const objectNote = objectCount ? `, ${objectCount} object${objectCount === 1 ? '' : 's'}` : '';
-      const stored = currentToken() ? ' Save current stores it with your puzzles.' : '';
       setImportStatus(
-        `Imported "${layout.title}" (${layout.width}×${layout.height}, ${wallCount} wall${wallCount === 1 ? '' : 's'}${objectNote}).${stored}`,
+        `Imported "${layout.title}" (${layout.width}×${layout.height}, ${wallCount} wall${wallCount === 1 ? '' : 's'}${objectNote}).`,
         'ok',
       );
       if (currentToken()) renderLayoutList(savedLayouts);
