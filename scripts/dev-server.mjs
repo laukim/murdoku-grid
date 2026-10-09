@@ -75,5 +75,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(port, "127.0.0.1", () => {
   console.log(`Murdoku grid helper at http://127.0.0.1:${port}`);
-  console.log("The board works without an account. Sign in with Google to save layouts.");
+  console.log("Saved puzzles are public. Sign in with Google to save or delete your own.");
 });

@@ -19,7 +19,7 @@ Set the grid size, then mark the puzzle as you work:
 - **Room walls** — click or drag internal grid lines to draw bold borders between rooms
 - **Character colors** — A–Z (and V for the victim) each have their own color
 - **Import JSON** — open a local room map or wall file, draw it, then keep marking
-- **Saved puzzles** — after Google sign-in, the page lists every layout stored for that account, with save, update, refresh, and delete. That list stays hidden until sign-in.
+- **Saved puzzles** — the list of every saved layout is visible without an account. Open one to keep marking. Sign in to save, update, or delete your own.
 
 Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
 
@@ -27,11 +27,11 @@ Clear all removes pencil marks, placements, and X cells. Room walls and objects 
 
 ## Auth
 
-The blank board, paste, and JSON import work with no account. Until Google sign-in, the page does not show save, load, refresh, delete, or the puzzle list. After sign-in, `GET /api/layouts` returns every layout for that account’s `sub`, and the page lists all of them.
+Anyone can list and open saved puzzles. Save, update, and delete need Google sign-in. A new puzzle is stored under that token’s `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`.
 
-The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`) and stores each layout under that token’s `sub`. List, read, update, and delete only see rows for that `sub`. A `user_sub` field in the JSON body is ignored.
+The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`).
 
-A missing or invalid token returns `401` `{ "error": "Sign in required" }`. The browser keeps a usable ID token in `localStorage` under `murdoku-grid.google-id-token` and sends `Authorization: Bearer`.
+`GET /api/layouts` and `GET /api/layouts/:id` do not require a token. A usable token may be sent on those reads; matching rows then include `mine: true`. A missing or invalid token on `POST`, `PUT`, or `DELETE` returns `401` `{ "error": "Sign in required" }`. Changing someone else’s row returns `404`. The browser keeps a usable ID token in `localStorage` under `murdoku-grid.google-id-token`.
 
 Sign-in from the deployed host needs this authorized JavaScript origin on that same OAuth client in Google Cloud:
 
@@ -44,11 +44,11 @@ This repo cannot change the Google Cloud console. Add the origin there before th
 
 | Method | Path | Body | Result |
 | --- | --- | --- | --- |
-| `GET` | `/api/layouts` | | `{ layouts: [{ id, title, width, height, created_at, updated_at }] }` for every row owned by the signed-in `sub` |
-| `POST` | `/api/layouts` | layout | `201 { layout }` |
-| `GET` | `/api/layouts/:id` | | `{ layout }` |
-| `PUT` | `/api/layouts/:id` | layout | `{ layout }` |
-| `DELETE` | `/api/layouts/:id` | | `{ ok: true }` |
+| `GET` | `/api/layouts` | | `{ layouts: [{ id, title, width, height, created_at, updated_at, mine? }] }` for every saved layout. No auth. `mine: true` when the optional bearer owns that row |
+| `POST` | `/api/layouts` | layout | `201 { layout }`. Google sign-in required |
+| `GET` | `/api/layouts/:id` | | `{ layout }` for any saved id. No auth. `mine: true` when the optional bearer owns it |
+| `PUT` | `/api/layouts/:id` | layout | `{ layout }`. Google sign-in required, and only for that account’s row |
+| `DELETE` | `/api/layouts/:id` | | `{ ok: true }`. Google sign-in required, and only for that account’s row |
 
 `width` is the column count and `height` is the row count (2–20). A layout body:
 
