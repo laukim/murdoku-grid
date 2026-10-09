@@ -187,7 +187,9 @@
     }
 
     #layoutWrites[hidden],
-    #layoutTools[hidden] {
+    #layoutTools[hidden],
+    #setupPanel[hidden],
+    #importPanel[hidden] {
       display: none !important;
     }
 
@@ -768,7 +770,7 @@
 
   <div class="page-columns">
   <div class="editor-column">
-  <div class="setup">
+  <div class="setup" id="setupPanel" hidden>
     <div class="field">
       <label for="rows">Rows</label>
       <input id="rows" type="number" min="2" max="20" value="9">
@@ -784,7 +786,7 @@
     <button class="primary" id="createBtn">Create grid</button>
   </div>
 
-  <section class="layouts" id="importPanel">
+  <section class="layouts" id="importPanel" hidden>
     <h2>Open a board</h2>
     <p class="sidebar-note">Paste one playground board, or import a JSON room map. Thick lines (~10px, not the outer border) become room walls. <code>board-cell-crossed</code> cells become obstacles.</p>
     <div class="layouts-paste">
@@ -846,7 +848,7 @@
 
   <section class="layouts" id="layoutsPanel">
     <h2>Saved puzzles</h2>
-    <p class="sidebar-note">Open any saved puzzle to view the rooms and objects. Sign in with Google to edit walls, furniture, and obstacles, or to save and delete your own.</p>
+    <p class="sidebar-note">Open any saved puzzle to view the board. Sign in with Google to create a grid, open a board, edit the layout, or save and delete your own.</p>
     <div class="layouts-row">
       <div class="field">
         <label for="layoutTitle">Title</label>
@@ -1045,6 +1047,8 @@
       rows: document.getElementById('rows'),
       cols: document.getElementById('cols'),
       labels: document.getElementById('labels'),
+      setupPanel: document.getElementById('setupPanel'),
+      importPanel: document.getElementById('importPanel'),
       createBtn: document.getElementById('createBtn'),
       workspace: document.getElementById('workspace'),
       gridWrap: document.getElementById('gridWrap'),
@@ -2201,6 +2205,7 @@
     }
 
     function initGrid() {
+      if (!canEditLayout()) return;
       const numRows = parseInt(els.rows.value, 10);
       const numCols = parseInt(els.cols.value, 10);
       if (Number.isNaN(numRows) || Number.isNaN(numCols) || numRows < 2 || numRows > 20 || numCols < 2 || numCols > 20) {
@@ -2259,6 +2264,8 @@
       const editable = canEditLayout();
       document.body.classList.toggle('view-only', !editable);
       els.layoutTools.hidden = !editable;
+      els.setupPanel.hidden = !editable;
+      els.importPanel.hidden = !editable;
       if (!editable) {
         if (wallGesture) {
           endWallGesture();
@@ -2351,7 +2358,7 @@
       gis.initialize({
         client_id: googleClientId,
         callback: (response) => {
-          withStatus(() => acceptGoogleCredential(response), setImportStatus);
+          withStatus(() => acceptGoogleCredential(response), setLayoutStatus);
         },
         auto_select: false,
         cancel_on_tap_outside: true,
@@ -2629,6 +2636,7 @@
     }
 
     async function importLayoutFromFile(file) {
+      if (!canEditLayout()) throw new Error('Sign in with Google to open a board.');
       const text = await file.text();
       if (text.length > 1000000) throw new Error('That file is too large.');
       const fallbackTitle = file.name.replace(/\.(json|html?)$/i, '').replace(/[-_]+/g, ' ').trim();
@@ -2637,6 +2645,7 @@
     }
 
     async function convertPastedBoard() {
+      if (!canEditLayout()) throw new Error('Sign in with Google to open a board.');
       const fallbackTitle = els.layoutTitle.value.trim() || 'Pasted board';
       const { importBoardSource } = await loadImporter();
       showImportedLayout(importBoardSource(els.boardPaste.value, { fallbackTitle }));
@@ -2652,10 +2661,13 @@
       els.cols.value = els.rows.value;
     });
     els.createBtn.addEventListener('click', initGrid);
-    els.signInBtn.addEventListener('click', () => withStatus(mountGoogleButton, setImportStatus));
+    els.signInBtn.addEventListener('click', () => withStatus(mountGoogleButton, setLayoutStatus));
     els.signOutBtn.addEventListener('click', signOut);
     els.convertPasteBtn.addEventListener('click', () => withStatus(convertPastedBoard, setImportStatus));
-    els.importLayoutBtn.addEventListener('click', () => els.importLayoutFile.click());
+    els.importLayoutBtn.addEventListener('click', () => {
+      if (!canEditLayout()) return;
+      els.importLayoutFile.click();
+    });
     els.importLayoutFile.addEventListener('change', () => {
       const file = els.importLayoutFile.files && els.importLayoutFile.files[0];
       els.importLayoutFile.value = '';

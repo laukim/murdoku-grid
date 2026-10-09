@@ -84,7 +84,12 @@ assert.match(html, /viewportBudget/);
 assert.match(html, /id="layoutTools" hidden/);
 assert.match(html, /body class="view-only"/);
 assert.match(html, /function canEditLayout/);
-assert.match(html, /Open any saved puzzle to view the rooms and objects/);
+assert.match(html, /id="setupPanel" hidden/);
+assert.match(html, /id="importPanel" hidden/);
+assert.match(html, /els.setupPanel.hidden = !editable/);
+assert.match(html, /els.importPanel.hidden = !editable/);
+assert.match(html, /Open any saved puzzle to view the board/);
+assert.match(html, /Sign in with Google to open a board/);
 assert.doesNotMatch(html, /keep editing walls, rooms, and objects/);
 assert.doesNotMatch(html, /Expected \$\{n\} labels/);
 
