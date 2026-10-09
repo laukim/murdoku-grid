@@ -4,6 +4,12 @@
  *
  * HTML: board-cell elements in row-major order, board-cell-crossed for
  * obstacles, and line elements whose --line-thickness is about 10px.
+ * Playground edges are buttons with data-testid edge-h-ROW-COL or
+ * edge-v-ROW-COL, class board-edge-horizontal or board-edge-vertical,
+ * and --line-thickness 10px (wall) or 3px (open). ROW and COL are the
+ * playground boundary indexes: h-3-1 is the line under row 2 at column 1
+ * (h,2,1). Perimeter edges use board-edge-fixed and are not room walls.
+ * A board-object-window on an edge becomes a window, not a solid wall.
  * Outer borders are thick too; they are not room walls.
  *
  * Compact JSON uses 1-based "after row / after column" for full thick
@@ -153,6 +159,11 @@ function boardFromHtml(raw) {
     ...collectWalls(hLines, "h", width, height, rules),
     ...collectWalls(vLines, "v", width, height, rules),
   ];
+  const windows = collectWindows(root, width, height);
+  for (const key of windows) {
+    const index = walls.indexOf(key);
+    if (index >= 0) walls.splice(index, 1);
+  }
   const indexes = cells.map((cell) => cellIndexAttr(cell));
   const useAttr = indexes.every((value) => value != null);
   const base = useAttr && Math.min(...indexes) === 1 && !indexes.includes(0) ? 1 : 0;
@@ -164,7 +175,7 @@ function boardFromHtml(raw) {
     objects.push(objectAt(index, width, height, id));
   });
 
-  const layout = { width, height, walls, objects };
+  const layout = { width, height, walls, windows, objects };
   const title = readHtmlTitle(raw, root);
   if (title) layout.title = title;
   return layout;
@@ -269,7 +280,10 @@ function isCell(el) {
 }
 
 function isCrossed(el) {
-  return el.classList.includes("board-cell-crossed") || el.classList.includes("crossed");
+  return el.classList.includes("board-cell-crossed")
+    || el.classList.includes("board-cell-special-crossed")
+    || el.classList.includes("crossed")
+    || el.classList.includes("special-crossed");
 }
 
 function isLineElement(el) {
@@ -279,13 +293,13 @@ function isLineElement(el) {
 
 function orientationOf(el) {
   return orientationFrom(el.classList)
-    || orientationFrom(classTokens(`${el.attrs["data-orientation"] || ""} ${el.attrs["data-dir"] || ""} ${el.style["--orientation"] || ""} ${el.style["--dir"] || ""}`))
+    || orientationFrom(classTokens(`${el.attrs["data-testid"] || ""} ${el.attrs.id || ""} ${el.attrs["data-orientation"] || ""} ${el.attrs["data-dir"] || ""} ${el.style["--orientation"] || ""} ${el.style["--dir"] || ""}`))
     || (el.parent ? orientationFrom(el.parent.classList) : null);
 }
 
 function orientationFrom(tokens) {
-  const h = tokens.some((token) => /^(?:h-line|hline|line-h|board-line-h|h-lines|lines-h|horizontal|board-lines-h)(?:-|$)/.test(token));
-  const v = tokens.some((token) => /^(?:v-line|vline|line-v|board-line-v|v-lines|lines-v|vertical|board-lines-v)(?:-|$)/.test(token));
+  const h = tokens.some((token) => /^(?:h-line|hline|line-h|board-line-h|h-lines|lines-h|horizontal|board-lines-h|board-edge-horizontal|edge-h)(?:-|$)/.test(token));
+  const v = tokens.some((token) => /^(?:v-line|vline|line-v|board-line-v|v-lines|lines-v|vertical|board-lines-v|board-edge-vertical|edge-v)(?:-|$)/.test(token));
   if (h && !v) return "h";
   if (v && !h) return "v";
   return null;
@@ -358,7 +372,7 @@ function collectWalls(lines, orientation, width, height, rules) {
   lines.forEach((line, index) => {
     if (!isThickLine(line, rules)) return;
     const explicit = positionWalls(line, orientation, width, height);
-    if (explicit) walls.push(...explicit);
+    if (explicit !== null) walls.push(...explicit);
     else if (shape) walls.push(...wallKeysAt(index, shape, orientation, width, height));
   });
   return walls;
@@ -398,6 +412,13 @@ function wallKeysAt(index, shape, orientation, width, height) {
 }
 
 function positionWalls(line, orientation, width, height) {
+  if (line.classList.includes("board-edge-fixed")) return [];
+  for (const token of [line.attrs["data-testid"], line.attrs.id, ...line.classList]) {
+    if (!token) continue;
+    const keys = playgroundEdgeKeys(token, width, height);
+    if (keys !== null) return keys.filter((key) => key.startsWith(`${orientation},`));
+  }
+
   const edge = line.attrs["data-edge"];
   if (typeof edge === "string" && /^(h|v),\d+,\d+$/.test(edge)) return [edge];
 
@@ -413,6 +434,51 @@ function positionWalls(line, orientation, width, height) {
   if (along == null) return Array.from({ length: span }, (_, i) => orientation === "h" ? `h,${index},${i}` : `v,${i},${index}`);
   if (along < 0 || along >= span) throw new Error("Thick edge is outside the grid");
   return [orientation === "h" ? `h,${index},${along}` : `v,${along},${index}`];
+}
+
+function playgroundEdgeKeys(token, width, height) {
+  const match = /^(?:edge-)?([hv])-(\d+)-(\d+)$/.exec(String(token || ""));
+  if (!match) return null;
+  const type = match[1];
+  const row = Number(match[2]);
+  const col = Number(match[3]);
+  if (type === "h") {
+    if (row === 0 || row === height) return [];
+    if (row < 0 || row > height || col < 0 || col >= width) throw new Error("Thick edge is outside the grid");
+    return [`h,${row - 1},${col}`];
+  }
+  if (col === 0 || col === width) return [];
+  if (row < 0 || row >= height || col < 0 || col > width) throw new Error("Thick edge is outside the grid");
+  return [`v,${row},${col - 1}`];
+}
+
+function collectWindows(root, width, height) {
+  const windows = [];
+  walk(root, (el) => {
+    if (!el.classList.includes("board-object-window")) return;
+    const key = windowKeyFromElement(el, width, height);
+    if (key) windows.push(key);
+  });
+  return [...new Set(windows)].sort();
+}
+
+function windowKeyFromElement(el, width, height) {
+  for (const token of [el.attrs["data-edge"], el.attrs["data-testid"], el.attrs.id]) {
+    if (!token) continue;
+    if (/^(h|v),\d+,\d+$/.test(token)) return token;
+    const keys = playgroundEdgeKeys(token, width, height)
+      || playgroundEdgeKeys(token.replace(/^(?:edge|window)-/, ""), width, height);
+    if (keys && keys.length) return keys[0];
+  }
+
+  const left = pxOf(el.style.left);
+  const top = pxOf(el.style.top);
+  if (left == null || top == null) return null;
+  const vertical = !/rotate\(\s*90deg\)/i.test(el.style.transform || "");
+  const row = vertical ? Math.round((top - 20) / 100) : Math.round((top + 30) / 100);
+  const col = vertical ? Math.round((left + 30) / 100) : Math.round((left - 20) / 100);
+  const keys = playgroundEdgeKeys(`${vertical ? "v" : "h"}-${row}-${col}`, width, height);
+  return keys && keys.length ? keys[0] : null;
 }
 
 function isThickLine(line, rules) {

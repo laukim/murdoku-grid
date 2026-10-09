@@ -124,6 +124,23 @@ expectReject({ rooms: ["AB", "AB"], width: 3 }, /width is 3/);
 expectReject({}, /Width must be an integer/);
 
 {
+  const layout = expectImport({
+    title: "Register",
+    width: 2,
+    height: 2,
+    walls: ["h,0,0", "h,0,1"],
+    windows: ["h,0,1"],
+    objects: [{ r: 0, c: 0, type: "cashRegister" }, { r: 0, c: 1, id: "register" }],
+  });
+  assert.deepEqual(layout.walls, ["h,0,0"]);
+  assert.deepEqual(layout.windows, ["h,0,1"]);
+  assert.deepEqual(layout.objects, [
+    { r: 0, c: 0, id: "cash-register" },
+    { r: 0, c: 1, id: "cash-register" },
+  ]);
+}
+
+{
   const layout = expectImport({ title: "O'Hare", width: 2, height: 2, walls: [] });
   const sql = layoutInsertSql(layout, { id: "fixed-id", now: "2026-10-08T12:00:00.000Z" });
   assert.match(sql, /O''Hare/);

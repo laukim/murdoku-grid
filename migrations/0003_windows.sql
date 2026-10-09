@@ -1,0 +1,1 @@
+ALTER TABLE layouts ADD COLUMN windows_json TEXT NOT NULL DEFAULT '[]';
