@@ -19,7 +19,7 @@ Set the grid size, then mark the puzzle as you work:
 - **Room walls** — click or drag internal grid lines to draw bold borders between rooms
 - **Character colors** — A–Z (and V for the victim) each have their own color
 - **Import JSON** — open a local room map or wall file, draw it, then keep marking
-- **Saved puzzles** — the list of every saved layout is visible without an account. Open one to keep marking. Sign in to save, update, or delete your own.
+- **Saved puzzles** — the list of every saved layout is visible without an account. Open one and keep editing walls, rooms, objects, size, paste, and import on this device. Sign in only to save, update, or delete your own.
 
 Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
 
