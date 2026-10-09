@@ -64,11 +64,16 @@ const migration = readFileSync(new URL("../migrations/0001_layouts.sql", import.
 assert.equal(migration, SCHEMA_SQL);
 
 const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
-for (const id of ["createBtn", "boardPaste", "convertPasteBtn", "importLayoutBtn", "importLayoutFile", "saveLayoutBtn", "updateLayoutBtn", "loadLayoutBtn", "deleteLayoutBtn", "layoutSelect", "signInBtn", "signOutBtn", "accountEmail", "furniturePicker", "obstaclePicker"]) {
+for (const id of ["createBtn", "boardPaste", "convertPasteBtn", "importLayoutBtn", "importLayoutFile", "saveLayoutBtn", "updateLayoutBtn", "refreshLayoutsBtn", "layoutList", "signInBtn", "signOutBtn", "accountEmail", "furniturePicker", "obstaclePicker"]) {
   assert.match(html, new RegExp(`id="${id}"`));
 }
+assert.match(html, /id="layoutsPanel" hidden/);
+assert.doesNotMatch(html, /id="layoutSelect"/);
 assert.doesNotMatch(html, /id="accessKey"/);
+assert.doesNotMatch(html, /Sign in to see saved layouts/);
 assert.match(html, /Sign in with Google/);
+const layoutsSource = readFileSync(new URL("../worker/layouts.js", import.meta.url), "utf8");
+assert.doesNotMatch(layoutsSource, /LIMIT\s+\d+/);
 assert.match(html, /data-mode="x"/);
 assert.match(html, /data-mode="erase"/);
 assert.match(html, /Room walls/);
@@ -215,6 +220,22 @@ const deps = { now: clock(), id: ids() };
   assert.equal(stillThere.body.layout.title, "Kim only");
   const row = db.db.prepare("SELECT user_sub FROM layouts WHERE id = ?").get(owned.body.layout.id);
   assert.equal(row.user_sub, "kim-sub");
+}
+
+{
+  const before = db.db.prepare("SELECT COUNT(*) AS n FROM layouts WHERE user_sub = ?").get("kim-sub").n;
+  for (let i = 0; i < 8; i++) {
+    const created = await call(env, "POST", "/api/layouts", {
+      body: sample({ title: `Batch ${i}` }),
+      deps,
+    });
+    assert.equal(created.status, 201);
+  }
+  const listed = await call(env, "GET", "/api/layouts", { deps });
+  const stored = db.db.prepare("SELECT COUNT(*) AS n FROM layouts WHERE user_sub = ?").get("kim-sub").n;
+  assert.equal(stored, before + 8);
+  assert.equal(listed.body.layouts.length, stored);
+  assert.equal(listed.body.layouts.filter((layout) => layout.title.startsWith("Batch ")).length, 8);
 }
 
 console.log("layouts api tests passed");

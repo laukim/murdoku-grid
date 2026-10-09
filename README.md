@@ -4,9 +4,9 @@ A browser grid for working [Murdoku](https://murdoku.com) puzzles with the same 
 
 The app is a Cloudflare Worker. Static files are Workers assets, and saved layouts live in a D1 database named `murdoku-layouts`. There is no puzzle catalog in this repo — you draw or load your own layouts.
 
-**App, after deploy:** https://murdoku-grid.mocholate.workers.dev
+**Live app:** https://murdoku-grid.mocholate.workers.dev
 
-GitHub Pages (`https://laukim.github.io/murdoku-grid/`) stops once the GitHub repo is private. That is expected; Cloudflare is the host. The Worker is not published yet — the deploy steps below create it. The D1 database and empty `layouts` table are already in the account.
+GitHub Pages (`https://laukim.github.io/murdoku-grid/`) stops once the GitHub repo is private. That is expected; Cloudflare is the host. The D1 database is `murdoku-layouts`. A source change still needs a deploy; the Worker currently running was published with embedded assets, so publish this repo with `npm run deploy` when Wrangler is logged in.
 
 ## What it does
 
@@ -19,7 +19,7 @@ Set the grid size, then mark the puzzle as you work:
 - **Room walls** — click or drag internal grid lines to draw bold borders between rooms
 - **Character colors** — A–Z (and V for the victim) each have their own color
 - **Import JSON** — open a local room map or wall file, draw it, then keep marking
-- **Saved layouts** — store the current grid, load it later, then keep adding objects and marks
+- **Saved puzzles** — after Google sign-in, the page lists every layout stored for that account, with save, update, refresh, and delete. That list stays hidden until sign-in.
 
 Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
 
@@ -27,7 +27,7 @@ Clear all removes pencil marks, placements, and X cells. Room walls and objects 
 
 ## Auth
 
-The blank board, paste, and JSON import work with no account. Save, load, refresh, and delete call `/api/layouts` and need Google sign-in.
+The blank board, paste, and JSON import work with no account. Until Google sign-in, the page does not show save, load, refresh, delete, or the puzzle list. After sign-in, `GET /api/layouts` returns every layout for that account’s `sub`, and the page lists all of them.
 
 The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`) and stores each layout under that token’s `sub`. List, read, update, and delete only see rows for that `sub`. A `user_sub` field in the JSON body is ignored.
 
@@ -44,7 +44,7 @@ This repo cannot change the Google Cloud console. Add the origin there before th
 
 | Method | Path | Body | Result |
 | --- | --- | --- | --- |
-| `GET` | `/api/layouts` | | `{ layouts: [{ id, title, width, height, created_at, updated_at }] }` |
+| `GET` | `/api/layouts` | | `{ layouts: [{ id, title, width, height, created_at, updated_at }] }` for every row owned by the signed-in `sub` |
 | `POST` | `/api/layouts` | layout | `201 { layout }` |
 | `GET` | `/api/layouts/:id` | | `{ layout }` |
 | `PUT` | `/api/layouts/:id` | layout | `{ layout }` |
@@ -70,7 +70,7 @@ This repo cannot change the Google Cloud console. Add the origin there before th
 
 ## Import a layout file
 
-The page’s **Import JSON** button reads a local file and draws it with the same room walls, cells, and object tools. Nothing is downloaded. After import, add obstacles or marks, then **Save current** to store the layout in D1. Load it later from the saved-layout list.
+The page’s **Import JSON** button reads a local file and draws it with the same room walls, cells, and object tools. Nothing is downloaded. After import, add obstacles or marks. **Save current** is on the signed-in puzzle list and stores the layout in D1 for that Google account.
 
 `examples/garden-path.json` is a small handmade sample, not a puzzle catalog:
 
@@ -110,7 +110,7 @@ node scripts/import-layout.mjs ./my-layout.json \
 
 ## Playground board paste
 
-Paste one board at a time into **Paste playground board**, then **Convert paste**. The grid draws the rooms. Add marks with the existing tools and **Save current** to store it in D1. This does not fetch the playground site.
+Paste one board at a time into **Paste playground board**, then **Convert paste**. The grid draws the rooms. Add marks with the existing tools. After Google sign-in, **Save current** stores it in D1. This does not fetch the playground site.
 
 Two inputs convert to the same `h,r,c` / `v,r,c` walls:
 

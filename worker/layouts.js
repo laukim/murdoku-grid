@@ -61,8 +61,7 @@ export async function listLayouts(db, userSub) {
     `SELECT id, title, width, height, created_at, updated_at
      FROM layouts
      WHERE user_sub = ?
-     ORDER BY updated_at DESC, id ASC
-     LIMIT 200`,
+     ORDER BY updated_at DESC, id ASC`,
   ).bind(userSub).all();
   return results.map(summaryFromRow);
 }

@@ -23,9 +23,32 @@
     }
 
     .subtitle {
-      margin: 0 0 1.25rem;
+      margin: 0;
       color: #666;
       font-size: 0.9rem;
+    }
+
+    .topbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 0.75rem 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .account-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      min-height: 2.4rem;
+    }
+
+    .account-bar #accountEmail {
+      font-size: 0.85rem;
+      color: #333;
     }
 
     .setup {
@@ -115,16 +138,6 @@
       align-items: center;
     }
 
-    .layouts select {
-      min-width: 16rem;
-      max-width: 100%;
-      padding: 0.4rem 0.5rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-      font-size: 0.95rem;
-      background: #fff;
-    }
-
     .layouts-check {
       display: flex;
       align-items: center;
@@ -140,17 +153,39 @@
       color: #555;
     }
 
-    .layouts-account {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 0.5rem;
-      min-height: 2.4rem;
+    #layoutsPanel[hidden] {
+      display: none !important;
     }
 
-    .layouts-account #accountEmail {
+    .layout-list {
+      list-style: none;
+      margin: 0.75rem 0 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .layout-list li {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .layout-list .layout-open {
+      flex: 1;
+      text-align: left;
+      white-space: normal;
+    }
+
+    .layout-list li.current .layout-open {
+      background: #dbeafe;
+      border-color: #2563eb;
+    }
+
+    .layout-list .layout-empty {
+      color: #666;
       font-size: 0.85rem;
-      color: #333;
     }
 
     .layouts-paste {
@@ -650,8 +685,18 @@
   </style>
 </head>
 <body>
-  <h1>Murdoku Grid Helper</h1>
-  <p class="subtitle">Pencil-mark candidates, place people, auto cross-out row &amp; column.</p>
+  <header class="topbar">
+    <div>
+      <h1>Murdoku Grid Helper</h1>
+      <p class="subtitle">Pencil-mark candidates, place people, auto cross-out row &amp; column.</p>
+    </div>
+    <div class="account-bar" id="accountBar">
+      <button type="button" id="signInBtn">Sign in with Google</button>
+      <div id="googleButtonSlot" hidden></div>
+      <span id="accountEmail" hidden></span>
+      <button type="button" id="signOutBtn" hidden>Sign out</button>
+    </div>
+  </header>
 
   <div class="setup">
     <div class="field">
@@ -669,42 +714,39 @@
     <button class="primary" id="createBtn">Create grid</button>
   </div>
 
-  <section class="layouts" id="layoutsPanel">
-    <h2>Saved layouts</h2>
-    <p class="sidebar-note">Paste one playground board, or import a JSON room map. Thick lines (~10px, not the outer border) become room walls. <code>board-cell-crossed</code> cells become obstacles. The board works without an account. Sign in with Google to save and load.</p>
+  <section class="layouts" id="importPanel">
+    <h2>Open a board</h2>
+    <p class="sidebar-note">Paste one playground board, or import a JSON room map. Thick lines (~10px, not the outer border) become room walls. <code>board-cell-crossed</code> cells become obstacles.</p>
     <div class="layouts-paste">
       <label for="boardPaste">Paste playground board</label>
       <textarea id="boardPaste" rows="5" spellcheck="false" placeholder="Paste one board’s HTML, or { &quot;width&quot;: 6, &quot;height&quot;: 6, &quot;thickH&quot;: [3], &quot;thickV&quot;: [3], &quot;crossed&quot;: [5, 18] }"></textarea>
     </div>
+    <div class="layouts-actions">
+      <button type="button" id="convertPasteBtn">Convert paste</button>
+      <button type="button" id="importLayoutBtn">Import JSON</button>
+      <input id="importLayoutFile" type="file" accept="application/json,.json,text/html,.html" hidden>
+    </div>
+    <p class="layouts-status" id="importStatus"></p>
+  </section>
+
+  <section class="layouts" id="layoutsPanel" hidden>
+    <h2>Saved puzzles</h2>
     <div class="layouts-row">
-      <div class="layouts-account" id="accountBar">
-        <button type="button" id="signInBtn">Sign in with Google</button>
-        <div id="googleButtonSlot" hidden></div>
-        <span id="accountEmail" hidden></span>
-        <button type="button" id="signOutBtn" hidden>Sign out</button>
-      </div>
       <div class="field">
         <label for="layoutTitle">Title</label>
         <input id="layoutTitle" class="wide" type="text" maxlength="80" placeholder="e.g. Manor study">
       </div>
     </div>
     <div class="layouts-actions">
-      <button type="button" id="convertPasteBtn">Convert paste</button>
-      <button type="button" id="importLayoutBtn">Import JSON</button>
-      <input id="importLayoutFile" type="file" accept="application/json,.json,text/html,.html" hidden>
       <button type="button" id="saveLayoutBtn">Save current</button>
       <button type="button" id="updateLayoutBtn">Update saved</button>
+      <button type="button" id="refreshLayoutsBtn">Refresh</button>
       <label class="layouts-check">
         <input id="includeMarks" type="checkbox" checked>
         Save pencil marks and placements
       </label>
-      <select id="layoutSelect">
-        <option value="">Sign in to see saved layouts</option>
-      </select>
-      <button type="button" id="loadLayoutBtn">Load</button>
-      <button type="button" id="refreshLayoutsBtn">Refresh</button>
-      <button type="button" id="deleteLayoutBtn">Delete</button>
     </div>
+    <ul class="layout-list" id="layoutList"></ul>
     <p class="layouts-status" id="layoutsStatus"></p>
   </section>
 
@@ -912,6 +954,8 @@
     let roomEdges = new Set();
     /** @type {string|null} D1 id of the layout last loaded or saved */
     let loadedLayoutId = null;
+    /** @type {{ id: string, title: string, width: number, height: number, updated_at?: string }[]} */
+    let savedLayouts = [];
     let layoutsQueue = Promise.resolve();
     let googleAccount = null;
     let googleClientId = '';
@@ -937,18 +981,18 @@
       googleButtonSlot: document.getElementById('googleButtonSlot'),
       accountEmail: document.getElementById('accountEmail'),
       signOutBtn: document.getElementById('signOutBtn'),
+      layoutsPanel: document.getElementById('layoutsPanel'),
       layoutTitle: document.getElementById('layoutTitle'),
       includeMarks: document.getElementById('includeMarks'),
-      layoutSelect: document.getElementById('layoutSelect'),
+      layoutList: document.getElementById('layoutList'),
+      importStatus: document.getElementById('importStatus'),
       boardPaste: document.getElementById('boardPaste'),
       convertPasteBtn: document.getElementById('convertPasteBtn'),
       importLayoutBtn: document.getElementById('importLayoutBtn'),
       importLayoutFile: document.getElementById('importLayoutFile'),
       saveLayoutBtn: document.getElementById('saveLayoutBtn'),
       updateLayoutBtn: document.getElementById('updateLayoutBtn'),
-      loadLayoutBtn: document.getElementById('loadLayoutBtn'),
       refreshLayoutsBtn: document.getElementById('refreshLayoutsBtn'),
-      deleteLayoutBtn: document.getElementById('deleteLayoutBtn'),
       layoutsStatus: document.getElementById('layoutsStatus'),
     };
 
@@ -2061,9 +2105,7 @@
       renderMapPickers();
       renderGrid();
       setMode('pencil');
-      setLayoutStatus(currentToken()
-        ? 'New grid. Save current to store it.'
-        : 'New grid. Sign in with Google when you want to save it.');
+      setImportStatus('New grid.');
       requestAnimationFrame(updateCellSize);
     }
 
@@ -2088,15 +2130,23 @@
     }
 
     function paintSignedOut() {
+      els.layoutsPanel.hidden = true;
       els.signInBtn.hidden = false;
       els.googleButtonSlot.hidden = true;
       els.accountEmail.hidden = true;
       els.accountEmail.textContent = '';
       els.signOutBtn.hidden = true;
-      fillLayoutSelect([]);
+      savedLayouts = [];
+      renderLayoutList([]);
+      setLayoutStatus('');
+      const localNote = els.importStatus.textContent
+        .replace(/\s*Save current stores it with your puzzles\./g, '')
+        .replace(/\s*Save current to store it\./g, '');
+      if (localNote !== els.importStatus.textContent) setImportStatus(localNote.trim());
     }
 
     function paintSignedIn(email) {
+      els.layoutsPanel.hidden = false;
       els.signInBtn.hidden = true;
       els.googleButtonSlot.hidden = true;
       els.accountEmail.hidden = false;
@@ -2151,7 +2201,7 @@
       gis.initialize({
         client_id: googleClientId,
         callback: (response) => {
-          withLayouts(() => acceptGoogleCredential(response));
+          withStatus(() => acceptGoogleCredential(response), setImportStatus);
         },
         auto_select: false,
         cancel_on_tap_outside: true,
@@ -2176,13 +2226,13 @@
       googleAccount.writeGoogleToken(localStorage, token);
       const email = googleAccount.decodeJwtPayload(token)?.email || 'Signed in';
       paintSignedIn(email);
-      await refreshLayouts(true);
-      setLayoutStatus(`Signed in as ${email}.`, 'ok');
+      const list = await refreshLayouts(true);
+      const count = list.length;
+      setLayoutStatus(`Signed in. ${count} saved puzzle${count === 1 ? '' : 's'}.`, 'ok');
     }
 
     function signOut() {
       clearGoogleSession();
-      setLayoutStatus('Signed out. The board stays on this device until you save it.');
     }
 
     async function bootAccount() {
@@ -2204,13 +2254,21 @@
       }
       const email = googleAccount.decodeJwtPayload(token)?.email || 'Signed in';
       paintSignedIn(email);
-      withLayouts(() => refreshLayouts(true));
+      withStatus(() => refreshLayouts());
+    }
+
+    function setStatus(el, message, kind) {
+      el.textContent = message;
+      el.classList.remove('error', 'ok');
+      if (kind) el.classList.add(kind);
+    }
+
+    function setImportStatus(message, kind) {
+      setStatus(els.importStatus, message, kind);
     }
 
     function setLayoutStatus(message, kind) {
-      els.layoutsStatus.textContent = message;
-      els.layoutsStatus.classList.remove('error', 'ok');
-      if (kind) els.layoutsStatus.classList.add(kind);
+      setStatus(els.layoutsStatus, message, kind);
     }
 
     async function api(path, { method = 'GET', body } = {}) {
@@ -2272,42 +2330,54 @@
       };
     }
 
-    function fillLayoutSelect(layouts) {
-      const previous = els.layoutSelect.value;
-      els.layoutSelect.innerHTML = '';
-      const placeholder = document.createElement('option');
-      placeholder.value = '';
-      placeholder.textContent = layouts.length
-        ? 'Choose a saved layout…'
-        : (currentToken() ? 'No saved layouts yet' : 'Sign in to see saved layouts');
-      els.layoutSelect.appendChild(placeholder);
-      for (const layout of layouts) {
-        const option = document.createElement('option');
-        option.value = layout.id;
-        const when = layout.updated_at ? layout.updated_at.slice(0, 16).replace('T', ' ') : '';
-        option.textContent = `${layout.title} (${layout.width}×${layout.height}${when ? `, ${when}` : ''})`;
-        els.layoutSelect.appendChild(option);
+    function layoutLabel(layout) {
+      const when = layout.updated_at ? layout.updated_at.slice(0, 16).replace('T', ' ') : '';
+      return `${layout.title} (${layout.width}×${layout.height}${when ? `, ${when}` : ''})`;
+    }
+
+    function renderLayoutList(layouts) {
+      savedLayouts = layouts;
+      els.layoutList.replaceChildren();
+      if (!layouts.length) {
+        if (!currentToken()) return;
+        const empty = document.createElement('li');
+        empty.className = 'layout-empty';
+        empty.textContent = 'No saved puzzles yet.';
+        els.layoutList.appendChild(empty);
+        return;
       }
-      const prefer = loadedLayoutId && [...els.layoutSelect.options].some(option => option.value === loadedLayoutId)
-        ? loadedLayoutId
-        : previous;
-      if ([...els.layoutSelect.options].some(option => option.value === prefer)) {
-        els.layoutSelect.value = prefer;
+      for (const layout of layouts) {
+        const item = document.createElement('li');
+        if (layout.id === loadedLayoutId) item.classList.add('current');
+        const open = document.createElement('button');
+        open.type = 'button';
+        open.className = 'layout-open';
+        open.textContent = layoutLabel(layout);
+        open.addEventListener('click', () => withStatus(() => loadLayoutById(layout.id)));
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'layout-delete';
+        remove.textContent = 'Delete';
+        remove.addEventListener('click', () => withStatus(() => deleteLayoutById(layout.id, layout.title)));
+        item.append(open, remove);
+        els.layoutList.appendChild(item);
       }
     }
 
     async function refreshLayouts(silent) {
       if (!currentToken()) {
-        fillLayoutSelect([]);
-        if (!silent) setLayoutStatus('Sign in with Google to save layouts.');
-        return;
+        els.layoutsPanel.hidden = true;
+        renderLayoutList([]);
+        return [];
       }
+      els.layoutsPanel.hidden = false;
       const { layouts } = await api('/api/layouts');
       const list = layouts || [];
-      fillLayoutSelect(list);
+      renderLayoutList(list);
       if (!silent) {
-        setLayoutStatus(list.length ? `${list.length} saved layout${list.length === 1 ? '' : 's'}.` : 'No saved layouts yet.', 'ok');
+        setLayoutStatus(list.length ? `${list.length} saved puzzle${list.length === 1 ? '' : 's'}.` : 'No saved puzzles yet.', 'ok');
       }
+      return list;
     }
 
     function applySavedLayout(layout) {
@@ -2364,23 +2434,19 @@
       setLayoutStatus(`Updated "${layout.title}".`, 'ok');
     }
 
-    async function loadSelectedLayout() {
-      const id = els.layoutSelect.value;
-      if (!id) throw new Error('Choose a saved layout to load.');
+    async function loadLayoutById(id) {
       const { layout } = await api(`/api/layouts/${id}`);
       applySavedLayout(layout);
-      setLayoutStatus(`Loaded "${layout.title}". Place obstacles or marks, then update.`, 'ok');
+      renderLayoutList(savedLayouts);
+      setLayoutStatus(`Loaded "${layout.title}".`, 'ok');
     }
 
-    async function deleteSelectedLayout() {
-      const id = els.layoutSelect.value || loadedLayoutId;
-      if (!id) throw new Error('Choose a saved layout to delete.');
-      const label = els.layoutSelect.selectedOptions[0]?.textContent || 'this layout';
-      if (!confirm(`Delete ${label}?`)) return;
+    async function deleteLayoutById(id, title) {
+      if (!confirm(`Delete ${title || 'this puzzle'}?`)) return;
       await api(`/api/layouts/${id}`, { method: 'DELETE' });
       if (loadedLayoutId === id) loadedLayoutId = null;
       await refreshLayouts(true);
-      setLayoutStatus('Deleted the saved layout.', 'ok');
+      setLayoutStatus(`Deleted "${title || 'the puzzle'}".`, 'ok');
     }
 
     async function loadImporter() {
@@ -2396,10 +2462,11 @@
       const wallCount = layout.walls.length;
       const objectCount = layout.objects.length;
       const objectNote = objectCount ? `, ${objectCount} object${objectCount === 1 ? '' : 's'}` : '';
-      setLayoutStatus(
-        `Imported "${layout.title}" (${layout.width}×${layout.height}, ${wallCount} wall${wallCount === 1 ? '' : 's'}${objectNote}). Add marks, then Save current.`,
+      setImportStatus(
+        `Imported "${layout.title}" (${layout.width}×${layout.height}, ${wallCount} wall${wallCount === 1 ? '' : 's'}${objectNote}).`,
         'ok',
       );
+      if (currentToken()) renderLayoutList(savedLayouts);
     }
 
     async function importLayoutFromFile(file) {
@@ -2416,31 +2483,29 @@
       showImportedLayout(importBoardSource(els.boardPaste.value, { fallbackTitle }));
     }
 
-    function withLayouts(fn) {
+    function withStatus(fn, report = setLayoutStatus) {
       layoutsQueue = layoutsQueue
         .then(() => fn())
-        .catch(err => setLayoutStatus(err instanceof Error ? err.message : 'Request failed', 'error'));
+        .catch(err => report(err instanceof Error ? err.message : 'Request failed', 'error'));
     }
 
     els.rows.addEventListener('input', () => {
       els.cols.value = els.rows.value;
     });
     els.createBtn.addEventListener('click', initGrid);
-    els.signInBtn.addEventListener('click', () => withLayouts(mountGoogleButton));
+    els.signInBtn.addEventListener('click', () => withStatus(mountGoogleButton, setImportStatus));
     els.signOutBtn.addEventListener('click', signOut);
-    els.convertPasteBtn.addEventListener('click', () => withLayouts(convertPastedBoard));
+    els.convertPasteBtn.addEventListener('click', () => withStatus(convertPastedBoard, setImportStatus));
     els.importLayoutBtn.addEventListener('click', () => els.importLayoutFile.click());
     els.importLayoutFile.addEventListener('change', () => {
       const file = els.importLayoutFile.files && els.importLayoutFile.files[0];
       els.importLayoutFile.value = '';
       if (!file) return;
-      withLayouts(() => importLayoutFromFile(file));
+      withStatus(() => importLayoutFromFile(file), setImportStatus);
     });
-    els.saveLayoutBtn.addEventListener('click', () => withLayouts(saveLayout));
-    els.updateLayoutBtn.addEventListener('click', () => withLayouts(updateSavedLayout));
-    els.loadLayoutBtn.addEventListener('click', () => withLayouts(loadSelectedLayout));
-    els.refreshLayoutsBtn.addEventListener('click', () => withLayouts(() => refreshLayouts()));
-    els.deleteLayoutBtn.addEventListener('click', () => withLayouts(deleteSelectedLayout));
+    els.saveLayoutBtn.addEventListener('click', () => withStatus(saveLayout));
+    els.updateLayoutBtn.addEventListener('click', () => withStatus(updateSavedLayout));
+    els.refreshLayoutsBtn.addEventListener('click', () => withStatus(() => refreshLayouts()));
     bootAccount();
     els.undoBtn.addEventListener('click', undo);
     els.clearBtn.addEventListener('click', () => {
