@@ -56,22 +56,29 @@ export function normalizeLayoutInput(body) {
   };
 }
 
-export async function listLayouts(db, userSub) {
+export async function listLayouts(db, viewerSub = "") {
   const { results } = await db.prepare(
-    `SELECT id, title, width, height, created_at, updated_at
+    `SELECT id, title, width, height, user_sub, created_at, updated_at
      FROM layouts
-     WHERE user_sub = ?
      ORDER BY updated_at DESC, id ASC`,
-  ).bind(userSub).all();
-  return results.map(summaryFromRow);
+  ).all();
+  return (results || []).map((row) => withMine(summaryFromRow(row), row, viewerSub));
+}
+
+export async function getPublicLayout(db, id, viewerSub = "") {
+  const row = await db.prepare(
+    `SELECT id, title, width, height, walls_json, objects_json, marks_json, characters_json, user_sub, created_at, updated_at
+     FROM layouts WHERE id = ?`,
+  ).bind(id).first();
+  return row ? withMine(layoutFromRow(row), row, viewerSub) : null;
 }
 
 export async function getLayoutById(db, userSub, id) {
   const row = await db.prepare(
-    `SELECT id, title, width, height, walls_json, objects_json, marks_json, characters_json, created_at, updated_at
+    `SELECT id, title, width, height, walls_json, objects_json, marks_json, characters_json, user_sub, created_at, updated_at
      FROM layouts WHERE id = ? AND user_sub = ?`,
   ).bind(id, userSub).first();
-  return row ? layoutFromRow(row) : null;
+  return row ? withMine(layoutFromRow(row), row, userSub) : null;
 }
 
 export async function insertLayout(db, userSub, id, value, now) {
@@ -133,6 +140,11 @@ function summaryFromRow(row) {
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
+}
+
+function withMine(layout, row, viewerSub) {
+  if (viewerSub && row.user_sub === viewerSub) layout.mine = true;
+  return layout;
 }
 
 function layoutFromRow(row) {

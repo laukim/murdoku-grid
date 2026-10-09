@@ -67,7 +67,8 @@ const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 for (const id of ["createBtn", "boardPaste", "convertPasteBtn", "importLayoutBtn", "importLayoutFile", "saveLayoutBtn", "updateLayoutBtn", "refreshLayoutsBtn", "layoutList", "signInBtn", "signOutBtn", "accountEmail", "furniturePicker", "obstaclePicker"]) {
   assert.match(html, new RegExp(`id="${id}"`));
 }
-assert.match(html, /id="layoutsPanel" hidden/);
+assert.doesNotMatch(html, /id="layoutsPanel" hidden/);
+assert.match(html, /id="layoutWrites" hidden/);
 assert.doesNotMatch(html, /id="layoutSelect"/);
 assert.doesNotMatch(html, /id="accessKey"/);
 assert.doesNotMatch(html, /Sign in to see saved layouts/);
@@ -84,11 +85,16 @@ const deps = { now: clock(), id: ids() };
 
 {
   const noKey = await call(env, "GET", "/api/layouts", { key: null });
-  assert.equal(noKey.status, 401);
-  assert.equal(noKey.body.error, "Sign in required");
+  assert.equal(noKey.status, 200);
+  assert.deepEqual(noKey.body.layouts, []);
   const badKey = await call(env, "GET", "/api/layouts", { key: "nope-nope-nope" });
-  assert.equal(badKey.status, 401);
-  assert.equal(badKey.body.error, "Sign in required");
+  assert.equal(badKey.status, 200);
+  assert.deepEqual(badKey.body.layouts, []);
+  const noWrite = await call(env, "POST", "/api/layouts", { key: null, body: sample(), deps });
+  assert.equal(noWrite.status, 401);
+  assert.equal(noWrite.body.error, "Sign in required");
+  const badWrite = await call(env, "PUT", "/api/layouts/00000000-0000-4000-8000-000000000099", { key: "nope-nope-nope", body: sample() });
+  assert.equal(badWrite.status, 401);
 }
 
 {
@@ -192,7 +198,10 @@ const deps = { now: clock(), id: ids() };
   const response = await worker.fetch(other, env);
   assert.equal(response.status, 404);
   const api = await worker.fetch(new Request("https://murdoku-grid.test/api/layouts"), env);
-  assert.equal(api.status, 401);
+  assert.equal(api.status, 200);
+  const listed = await api.json();
+  assert.ok(Array.isArray(listed.layouts));
+  assert.equal(listed.layouts.some((layout) => layout.user_sub != null), false);
 }
 
 {
@@ -201,12 +210,25 @@ const deps = { now: clock(), id: ids() };
     deps,
   });
   assert.equal(owned.status, 201);
+  assert.equal(owned.body.layout.mine, true);
+  assert.equal(owned.body.layout.user_sub, undefined);
   const kimList = await call(env, "GET", "/api/layouts", { deps });
-  assert.ok(kimList.body.layouts.some((layout) => layout.id === owned.body.layout.id));
+  const kimItem = kimList.body.layouts.find((layout) => layout.id === owned.body.layout.id);
+  assert.equal(kimItem.mine, true);
+  assert.equal(kimItem.user_sub, undefined);
+  const anonList = await call(env, "GET", "/api/layouts", { key: null });
+  const anonItem = anonList.body.layouts.find((layout) => layout.id === owned.body.layout.id);
+  assert.ok(anonItem);
+  assert.equal(anonItem.mine, undefined);
+  assert.equal(anonItem.title, "Kim only");
   const otherList = await call(env, "GET", "/api/layouts", { key: OTHER, deps });
-  assert.equal(otherList.body.layouts.some((layout) => layout.id === owned.body.layout.id), false);
-  const otherRead = await call(env, "GET", `/api/layouts/${owned.body.layout.id}`, { key: OTHER, deps });
-  assert.equal(otherRead.status, 404);
+  const otherItem = otherList.body.layouts.find((layout) => layout.id === owned.body.layout.id);
+  assert.ok(otherItem);
+  assert.equal(otherItem.mine, undefined);
+  const otherRead = await call(env, "GET", `/api/layouts/${owned.body.layout.id}`, { key: null });
+  assert.equal(otherRead.status, 200);
+  assert.equal(otherRead.body.layout.title, "Kim only");
+  assert.equal(otherRead.body.layout.mine, undefined);
   const otherWrite = await call(env, "PUT", `/api/layouts/${owned.body.layout.id}`, {
     key: OTHER,
     body: sample({ title: "Taken" }),
@@ -223,7 +245,7 @@ const deps = { now: clock(), id: ids() };
 }
 
 {
-  const before = db.db.prepare("SELECT COUNT(*) AS n FROM layouts WHERE user_sub = ?").get("kim-sub").n;
+  const before = db.db.prepare("SELECT COUNT(*) AS n FROM layouts").get().n;
   for (let i = 0; i < 8; i++) {
     const created = await call(env, "POST", "/api/layouts", {
       body: sample({ title: `Batch ${i}` }),
@@ -232,7 +254,7 @@ const deps = { now: clock(), id: ids() };
     assert.equal(created.status, 201);
   }
   const listed = await call(env, "GET", "/api/layouts", { deps });
-  const stored = db.db.prepare("SELECT COUNT(*) AS n FROM layouts WHERE user_sub = ?").get("kim-sub").n;
+  const stored = db.db.prepare("SELECT COUNT(*) AS n FROM layouts").get().n;
   assert.equal(stored, before + 8);
   assert.equal(listed.body.layouts.length, stored);
   assert.equal(listed.body.layouts.filter((layout) => layout.title.startsWith("Batch ")).length, 8);

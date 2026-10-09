@@ -2,7 +2,7 @@ import { verifyGoogleIdToken } from "../js/google-jwt.js";
 import {
   deleteLayoutById,
   ensureSchema,
-  getLayoutById,
+  getPublicLayout,
   insertLayout,
   listLayouts,
   normalizeLayoutInput,
@@ -13,15 +13,16 @@ const MAX_BODY = 200_000;
 const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function handleLayoutsRequest(request, env, deps = {}) {
-  const userSub = await authenticate(request, deps);
-  if (userSub instanceof Response) return userSub;
-
   const parts = new URL(request.url).pathname.split("/").filter(Boolean);
   if (parts[0] !== "api" || parts[1] !== "layouts" || parts.length > 3) {
     return json({ error: "Not found" }, 404);
   }
   const id = parts[2] || null;
   if (id && !ID_RE.test(id)) return json({ error: "Not found" }, 404);
+
+  const write = request.method === "POST" || request.method === "PUT" || request.method === "DELETE";
+  const userSub = write ? await authenticate(request, deps) : await optionalViewer(request, deps);
+  if (userSub instanceof Response) return userSub;
 
   try {
     await ensureSchema(env.DB);
@@ -53,7 +54,7 @@ async function createLayout(request, env, userSub, deps) {
 }
 
 async function readLayout(env, userSub, id) {
-  const layout = await getLayoutById(env.DB, userSub, id);
+  const layout = await getPublicLayout(env.DB, id, userSub);
   if (!layout) return json({ error: "Not found" }, 404);
   return json({ layout });
 }
@@ -77,15 +78,25 @@ async function removeLayout(env, userSub, id) {
 }
 
 async function authenticate(request, deps) {
+  const identity = await readIdentity(request, deps);
+  if (!identity?.sub) return json({ error: "Sign in required" }, 401);
+  return identity.sub;
+}
+
+async function optionalViewer(request, deps) {
+  const identity = await readIdentity(request, deps);
+  return identity?.sub || "";
+}
+
+async function readIdentity(request, deps) {
   const verify = deps.verify || verifyGoogleIdToken;
   const token = bearerToken(request);
-  if (!token) return json({ error: "Sign in required" }, 401);
+  if (!token) return null;
   try {
     const identity = await verify(token);
-    if (!identity?.sub) return json({ error: "Sign in required" }, 401);
-    return identity.sub;
+    return identity?.sub ? identity : null;
   } catch {
-    return json({ error: "Sign in required" }, 401);
+    return null;
   }
 }
 
