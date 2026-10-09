@@ -78,6 +78,11 @@ assert.doesNotMatch(layoutsSource, /LIMIT\s+\d+/);
 assert.match(html, /data-mode="x"/);
 assert.match(html, /data-mode="erase"/);
 assert.match(html, /Room walls/);
+assert.match(html, /class="page-columns"/);
+assert.match(html, /function boardHeightBudget/);
+assert.match(html, /viewportBudget/);
+assert.match(html, /keep editing walls, rooms, and objects/);
+assert.doesNotMatch(html, /Expected \$\{n\} labels/);
 
 const db = new LocalD1();
 const env = envWith(db);
