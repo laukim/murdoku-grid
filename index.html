@@ -186,8 +186,15 @@
       align-items: center;
     }
 
-    #layoutWrites[hidden] {
+    #layoutWrites[hidden],
+    #layoutTools[hidden] {
       display: none !important;
+    }
+
+    body.view-only .room-edge,
+    body.view-only .room-edge:hover {
+      pointer-events: none;
+      background: transparent;
     }
 
     .layout-list {
@@ -745,7 +752,7 @@
     }
   </style>
 </head>
-<body>
+<body class="view-only">
   <header class="topbar">
     <div>
       <h1>Murdoku Grid Helper</h1>
@@ -797,13 +804,19 @@
       <h2>Characters</h2>
       <div class="char-list" id="charList"></div>
 
-      <h2>Furniture</h2>
-      <p class="sidebar-note">People can be placed here</p>
-      <div class="map-picker" id="furniturePicker"></div>
+      <div id="layoutTools" hidden>
+        <h2>Rooms</h2>
+        <p class="sidebar-note">Room walls: click or drag internal lines</p>
 
-      <h2>Obstacles</h2>
-      <p class="sidebar-note">Blocks placement</p>
-      <div class="map-picker" id="obstaclePicker"></div>
+        <h2>Furniture</h2>
+        <p class="sidebar-note">People can be placed here</p>
+        <div class="map-picker" id="furniturePicker"></div>
+
+        <h2>Obstacles</h2>
+        <p class="sidebar-note">Blocks placement</p>
+        <div class="map-picker" id="obstaclePicker"></div>
+        <p class="hint"><kbd>O</kbd> map objects · <kbd>1</kbd>–<kbd>9</kbd> pick one</p>
+      </div>
 
       <h2>Tools</h2>
       <div class="tools">
@@ -814,8 +827,7 @@
       </div>
 
       <p class="hint">Click = pencil · Long-press = place · Drag = mark cells<br>
-        Room walls: click or drag internal lines<br>
-        <kbd>A</kbd>–<kbd>Z</kbd> &amp; <kbd>V</kbd> select · <kbd>O</kbd> map objects · <kbd>X</kbd> mark X</p>
+        <kbd>A</kbd>–<kbd>Z</kbd> &amp; <kbd>V</kbd> select · <kbd>X</kbd> mark X</p>
     </aside>
 
     <div class="grid-wrap" id="gridWrap">
@@ -834,7 +846,7 @@
 
   <section class="layouts" id="layoutsPanel">
     <h2>Saved puzzles</h2>
-    <p class="sidebar-note">Open any saved puzzle and keep editing walls, rooms, and objects on this device. Sign in with Google only to save or delete your own.</p>
+    <p class="sidebar-note">Open any saved puzzle to view the rooms and objects. Sign in with Google to edit walls, furniture, and obstacles, or to save and delete your own.</p>
     <div class="layouts-row">
       <div class="field">
         <label for="layoutTitle">Title</label>
@@ -1037,6 +1049,7 @@
       workspace: document.getElementById('workspace'),
       gridWrap: document.getElementById('gridWrap'),
       charList: document.getElementById('charList'),
+      layoutTools: document.getElementById('layoutTools'),
       furniturePicker: document.getElementById('furniturePicker'),
       obstaclePicker: document.getElementById('obstaclePicker'),
       grid: document.getElementById('grid'),
@@ -1498,6 +1511,10 @@
       if (selectedChar === null) return false;
       const ci = selectedChar;
 
+      if (action === 'map-toggle' || action === 'map-add') {
+        if (!canEditLayout()) return false;
+      }
+
       if (action === 'map-toggle') {
         if (cell.feature === selectedMapItem) {
           cell.feature = null;
@@ -1632,6 +1649,7 @@
 
     /** @returns {boolean} */
     function applyWallEdge(key, addMode) {
+      if (!canEditLayout()) return false;
       if (roomEdges.has(key) === addMode) return false;
       setRoomEdge(key, addMode);
       refreshWallEdgeVisual(key);
@@ -1741,6 +1759,7 @@
     }
 
     function onWallPointerDown(e) {
+      if (!canEditLayout()) return;
       if (!gridReady() || e.button !== 0) return;
       const key = pickRoomEdgeAtPoint(e.clientX, e.clientY);
       if (!key) return;
@@ -1794,7 +1813,7 @@
           div.style.top = `calc(${(r + 1)} * ${cs} - ${hit / 2}px)`;
           div.style.width = `calc(${cs} - ${hit}px)`;
           div.style.height = `${hit}px`;
-          div.title = 'Click or drag along this wall';
+          div.title = canEditLayout() ? 'Click or drag along this wall' : '';
           els.roomEdgesLayer.appendChild(div);
         }
       }
@@ -1809,7 +1828,7 @@
           div.style.top = `calc(${r} * ${cs} + ${inset}px)`;
           div.style.width = `${hit}px`;
           div.style.height = `calc(${cs} - ${hit}px)`;
-          div.title = 'Click or drag along this wall';
+          div.title = canEditLayout() ? 'Click or drag along this wall' : '';
           els.roomEdgesLayer.appendChild(div);
         }
       }
@@ -1951,6 +1970,7 @@
 
     function onGridPointerDown(e) {
       if (!gridReady()) return;
+      if (mode === 'map' && !canEditLayout()) return;
       if (e.target.closest('.room-edge')) return;
       if (selectedChar === null && mode !== 'x' && mode !== 'erase' && mode !== 'map') return;
       if (e.button !== 0) return;
@@ -2138,6 +2158,7 @@
     }
 
     function setMode(next) {
+      if (next === 'map' && !canEditLayout()) next = 'pencil';
       mode = next;
       els.workspace.classList.toggle('mode-map', mode === 'map');
       document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -2230,6 +2251,29 @@
       }
     }
 
+    function canEditLayout() {
+      return !!currentToken();
+    }
+
+    function syncLayoutEditing() {
+      const editable = canEditLayout();
+      document.body.classList.toggle('view-only', !editable);
+      els.layoutTools.hidden = !editable;
+      if (!editable) {
+        if (wallGesture) {
+          endWallGesture();
+          unbindWallDocListeners();
+        }
+        if (gesture && mode === 'map') {
+          endGesture();
+          unbindDocPointerListeners();
+          layoutLock = false;
+        }
+        if (mode === 'map') setMode('pencil');
+      }
+      if (gridReady()) renderRoomEdges();
+    }
+
     function paintSignedOut() {
       els.layoutsPanel.hidden = false;
       els.layoutWrites.hidden = true;
@@ -2245,6 +2289,7 @@
       });
       loadedLayoutMine = false;
       renderLayoutList(savedLayouts);
+      syncLayoutEditing();
     }
 
     function paintSignedIn(email) {
@@ -2256,6 +2301,7 @@
       els.accountEmail.textContent = email || 'Signed in';
       els.signOutBtn.hidden = false;
       syncUpdateButton();
+      syncLayoutEditing();
     }
 
     function clearGoogleSession() {
@@ -2666,8 +2712,8 @@
       }
 
       if (e.key === 'e') setMode('erase');
-      if (e.key === 'o') setMode('map');
-      if (e.key >= '1' && e.key <= '9' && mode === 'map') {
+      if (e.key === 'o' && canEditLayout()) setMode('map');
+      if (e.key >= '1' && e.key <= '9' && mode === 'map' && canEditLayout()) {
         const idx = parseInt(e.key, 10) - 1;
         if (idx < MAP_ITEMS.length) {
           selectedMapItem = MAP_ITEMS[idx].id;
