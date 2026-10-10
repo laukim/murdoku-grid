@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { importPlaygroundLayout, layoutInsertSql } from "../layout-import.js";
+import { importPlaygroundLayout, KNOWN_OBJECT_IDS, layoutInsertSql } from "../layout-import.js";
 import { normalizeLayoutInput } from "../worker/layouts.js";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -18,6 +18,20 @@ function expectImport(input, options) {
 
 function expectReject(input, pattern) {
   assert.throws(() => importPlaygroundLayout(input), pattern);
+}
+
+const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+const catalog = page.slice(page.indexOf("const FURNITURE_ITEMS"), page.indexOf("const MAP_ITEMS"));
+const pickerIds = [...catalog.matchAll(/id: '([^']+)'/g)].map((match) => match[1]);
+assert.deepEqual(pickerIds, KNOWN_OBJECT_IDS);
+const obstacleBlock = page.slice(page.indexOf("const OBSTACLE_ITEMS"), page.indexOf("const MAP_ITEMS"));
+for (const id of ["boulder", "rubble"]) {
+  const start = obstacleBlock.indexOf(`id: '${id}'`);
+  assert.ok(start >= 0, `${id} is an obstacle`);
+  const next = obstacleBlock.indexOf("\n      {", start + 1);
+  const entry = obstacleBlock.slice(start, next === -1 ? obstacleBlock.length : next);
+  assert.equal(entry.includes("stretchable"), false, `${id} stays a single cell`);
+  assert.match(entry, /category: 'obstacle'/);
 }
 
 const garden = JSON.parse(readFileSync(new URL("../examples/garden-path.json", import.meta.url), "utf8"));
@@ -74,6 +88,24 @@ const garden = JSON.parse(readFileSync(new URL("../examples/garden-path.json", i
   assert.deepEqual(layout.walls, ["h,1,2", "v,0,1", "v,0,2"]);
   assert.deepEqual(layout.objects, [{ r: 2, c: 1, id: "bookshelf" }]);
   assert.deepEqual(layout.marks, [{ r: 0, c: 0, confirmed: 0, blocked: false, pencil: [] }]);
+}
+
+{
+  const layout = expectImport({
+    title: "Debris",
+    width: 4,
+    height: 3,
+    obstacles: [
+      { r: 0, c: 1, id: "boulder" },
+      { r: 2, c: 3, type: "Rubble" },
+    ],
+  });
+  assert.deepEqual(layout.objects, [
+    { r: 0, c: 1, id: "boulder" },
+    { r: 2, c: 3, id: "rubble" },
+  ]);
+  assert.match(layoutInsertSql(layout), /"id":"boulder"/);
+  assert.match(layoutInsertSql(layout), /"id":"rubble"/);
 }
 
 {

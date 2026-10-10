@@ -23,6 +23,8 @@ export const KNOWN_OBJECT_IDS = [
   "tree",
   "tv",
   "statue",
+  "boulder",
+  "rubble",
   "other",
 ];
 
