@@ -849,6 +849,10 @@
       color: #888;
       font-weight: 500;
     }
+
+    .row-labels .axis-label {
+      height: var(--cell-size);
+    }
   </style>
 </head>
 <body class="view-only">
@@ -2354,8 +2358,12 @@
         updateCellSize();
         const rect = els.gridWrap.getBoundingClientRect();
         const visibleHeight = Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0);
-        if (visibleHeight < Math.min(rect.height, 240)) {
+        // The title list can leave only a strip of the board in view. Scroll
+        // unless most of the board, or most of the viewport, is already showing.
+        const wants = Math.min(rect.height, window.innerHeight * 0.62);
+        if (visibleHeight + 1 < wants) {
           els.gridWrap.scrollIntoView({ block: 'start', inline: 'nearest' });
+          requestAnimationFrame(() => updateCellSize());
         }
       });
     }
