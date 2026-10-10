@@ -194,6 +194,27 @@ const deps = { now: clock(), id: ids() };
   });
   assert.equal(lastWins.status, 201);
   assert.deepEqual(lastWins.body.layout.objects, [{ r: 0, c: 0, id: "statue" }]);
+
+  const debris = await call(env, "POST", "/api/layouts", {
+    body: sample({
+      title: "Debris",
+      objects: [
+        { r: 1, c: 2, id: "rubble" },
+        { r: 0, c: 0, id: "boulder" },
+      ],
+    }),
+    deps,
+  });
+  assert.equal(debris.status, 201);
+  assert.deepEqual(debris.body.layout.objects, [
+    { r: 0, c: 0, id: "boulder" },
+    { r: 1, c: 2, id: "rubble" },
+  ]);
+  const stored = await db.prepare("SELECT objects_json FROM layouts WHERE id = ?").bind(debris.body.layout.id).first();
+  assert.equal(stored.objects_json, JSON.stringify([
+    { r: 0, c: 0, id: "boulder" },
+    { r: 1, c: 2, id: "rubble" },
+  ]));
 }
 
 {
