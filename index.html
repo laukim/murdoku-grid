@@ -194,6 +194,10 @@
       display: none !important;
     }
 
+    body:not(.view-only) .play-key-hint {
+      display: none;
+    }
+
     body.view-only .room-edge,
     body.view-only .room-edge:hover {
       pointer-events: none;
@@ -1095,7 +1099,7 @@
       </div>
 
       <p class="hint">Click = pencil · Long-press = place · Drag = mark cells<br>
-        Play mode: <kbd>A</kbd>–<kbd>Z</kbd> select a character · <kbd>X</kbd> mark X · <kbd>E</kbd> erase · <kbd>O</kbd> map<br>
+        <span class="play-key-hint">Play: <kbd>A</kbd>–<kbd>Z</kbd> select a character · <kbd>X</kbd> mark X · <kbd>E</kbd> erase<br></span>
         <kbd>←</kbd> <kbd>→</kbd> previous / next puzzle</p>
     </aside>
 
@@ -3267,32 +3271,28 @@
 
       const letter = e.key.length === 1 && /[a-zA-Z]/.test(e.key) ? e.key.toLowerCase() : '';
 
-      // Map mode owns A–Z for furniture and obstacles. E and X stay the erase
-      // and mark-X tools. Unassigned letters do not place characters.
-      if (letter && mode === 'map' && canEditLayout()) {
+      // Signed-in editing owns the letter keys, including right after Load,
+      // when the board is still in pencil mode. Furniture and obstacles use
+      // their letters; E stays erase and X stays mark X. Unassigned letters
+      // do not place characters. Unsigned play keeps character letters.
+      if (canEditLayout()) {
         if (letter === 'e') setMode('erase');
         else if (letter === 'x') setMode('x');
-        else if (MAP_ITEM_BY_SHORTCUT[letter]) selectMapItem(MAP_ITEM_BY_SHORTCUT[letter].id);
+        else if (letter && MAP_ITEM_BY_SHORTCUT[letter]) selectMapItem(MAP_ITEM_BY_SHORTCUT[letter].id);
+        else if (e.key >= '1' && e.key <= '9') {
+          const idx = parseInt(e.key, 10) - 1;
+          if (idx < MAP_ITEMS.length) selectMapItem(MAP_ITEMS[idx].id);
+        }
+        if (letter || (e.key >= '1' && e.key <= '9')) e.preventDefault();
+        return;
+      }
+
+      if (letter && selectByKey(e.key)) {
         e.preventDefault();
         return;
       }
 
-      if (letter) {
-        if (selectByKey(e.key)) {
-          e.preventDefault();
-          return;
-        }
-      }
-
       if (e.key === 'e') setMode('erase');
-      if (e.key === 'o' && canEditLayout()) setMode('map');
-      if (e.key >= '1' && e.key <= '9' && mode === 'map' && canEditLayout()) {
-        const idx = parseInt(e.key, 10) - 1;
-        if (idx < MAP_ITEMS.length) {
-          selectedMapItem = MAP_ITEMS[idx].id;
-          renderMapPickers();
-        }
-      }
     });
   </script>
 </body>
