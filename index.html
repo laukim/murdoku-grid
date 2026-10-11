@@ -220,21 +220,6 @@
       display: none;
     }
 
-    body.view-only .layout-list {
-      flex-direction: row;
-      flex-wrap: wrap;
-      margin-top: 0.35rem;
-    }
-
-    body.view-only .layout-list li {
-      flex: 0 1 auto;
-      max-width: 100%;
-    }
-
-    body.view-only .layout-list .layout-open {
-      white-space: nowrap;
-    }
-
     body.view-only .workspace.visible {
       grid-template-columns: minmax(0, 1fr) 12.5rem;
     }
@@ -243,8 +228,16 @@
       order: 2;
     }
 
-    body.view-only .grid-wrap {
+    body.view-only .board-column {
       order: 1;
+    }
+
+    @media (min-width: 720px) {
+      body.view-only .layout-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+        align-content: start;
+      }
     }
 
     @media (max-width: 900px) {
@@ -253,35 +246,170 @@
       }
     }
 
+    .library-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem 0.5rem;
+      align-items: center;
+      margin-top: 0.7rem;
+    }
+
+    #librarySearch {
+      flex: 1 1 11rem;
+      min-width: 8rem;
+      padding: 0.4rem 0.55rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font: inherit;
+      font-size: 0.9rem;
+      background: #fff;
+    }
+
+    .volume-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+    }
+
+    .volume-filters button {
+      padding: 0.28rem 0.62rem;
+      font-size: 0.8rem;
+      border-radius: 999px;
+    }
+
+    .volume-filters button[aria-pressed="true"] {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+
+    .volume-filters button[aria-pressed="true"]:hover {
+      background: #1d4ed8;
+    }
+
+    .library-count {
+      margin-left: auto;
+      font-size: 0.75rem;
+      color: #777;
+      white-space: nowrap;
+    }
+
     .layout-list {
       list-style: none;
-      margin: 0.75rem 0 0;
-      padding: 0;
+      margin: 0.55rem 0 0;
+      padding: 0.2rem;
       display: flex;
       flex-direction: column;
-      gap: 0.35rem;
+      gap: 0.05rem;
+      max-height: min(18rem, 42vh);
+      overflow: auto;
+      border: 1px solid #e6e6e6;
+      border-radius: 6px;
+      background: #fafafa;
     }
 
     .layout-list li {
       display: flex;
-      gap: 0.5rem;
+      gap: 0.35rem;
       align-items: center;
+      min-width: 0;
     }
 
     .layout-list .layout-open {
       flex: 1;
+      min-width: 0;
       text-align: left;
-      white-space: normal;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.1rem 0.65rem;
+      padding: 0.36rem 0.5rem;
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .layout-list .layout-open:hover {
+      background: #fff;
+      border-color: #e5e5e5;
     }
 
     .layout-list li.current .layout-open {
       background: #dbeafe;
-      border-color: #2563eb;
+      border-color: #bfdbfe;
+    }
+
+    .layout-title {
+      font-weight: 600;
+    }
+
+    .layout-meta {
+      color: #777;
+      font-size: 0.75rem;
+      font-weight: 400;
+    }
+
+    .layout-delete {
+      flex: 0 0 auto;
+      padding: 0.28rem 0.45rem;
+      font-size: 0.75rem;
     }
 
     .layout-list .layout-empty {
       color: #666;
       font-size: 0.85rem;
+      padding: 0.45rem 0.5rem;
+      grid-column: 1 / -1;
+    }
+
+    .board-column {
+      min-width: 0;
+    }
+
+    .puzzle-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      margin: 0 0 0.55rem;
+    }
+
+    .puzzle-nav[hidden] {
+      display: none !important;
+    }
+
+    .puzzle-nav button {
+      padding: 0.4rem 0.7rem;
+      font-size: 0.9rem;
+    }
+
+    .puzzle-nav button:disabled,
+    .puzzle-nav button:disabled:hover {
+      opacity: 0.4;
+      cursor: default;
+      background: #f4f4f4;
+      color: #888;
+    }
+
+    .puzzle-nav-label {
+      min-width: 0;
+      text-align: center;
+    }
+
+    .puzzle-nav-title {
+      display: block;
+      font-weight: 600;
+      font-size: 1rem;
+    }
+
+    .puzzle-nav-count {
+      display: block;
+      margin-top: 0.1rem;
+      font-size: 0.75rem;
+      color: #666;
+      font-weight: 400;
     }
 
     .layouts-paste {
@@ -340,7 +468,7 @@
         grid-template-columns: 1fr;
       }
 
-      .grid-wrap {
+      .board-column {
         order: -1;
       }
 
@@ -937,9 +1065,19 @@
       </div>
 
       <p class="hint">Click = pencil · Long-press = place · Drag = mark cells<br>
-        <kbd>A</kbd>–<kbd>Z</kbd> &amp; <kbd>V</kbd> select · <kbd>X</kbd> mark X</p>
+        <kbd>A</kbd>–<kbd>Z</kbd> &amp; <kbd>V</kbd> select · <kbd>X</kbd> mark X<br>
+        <kbd>←</kbd> <kbd>→</kbd> previous / next puzzle</p>
     </aside>
 
+    <div class="board-column" id="boardColumn">
+    <div class="puzzle-nav" id="puzzleNav" hidden>
+      <button type="button" id="prevPuzzleBtn" aria-label="Previous puzzle" title="Previous puzzle (Left arrow)" disabled>← Prev</button>
+      <div class="puzzle-nav-label" id="puzzleNavLabel">
+        <span class="puzzle-nav-title" id="puzzleNavTitle"></span>
+        <span class="puzzle-nav-count" id="puzzleNavCount"></span>
+      </div>
+      <button type="button" id="nextPuzzleBtn" aria-label="Next puzzle" title="Next puzzle (Right arrow)" disabled>Next →</button>
+    </div>
     <div class="grid-wrap" id="gridWrap">
       <div class="grid-board">
         <div class="corner"></div>
@@ -950,6 +1088,7 @@
           <div class="room-edges" id="roomEdges"></div>
         </div>
       </div>
+    </div>
     </div>
   </div>
   </div>
@@ -973,6 +1112,11 @@
         </label>
       </div>
       <button type="button" id="refreshLayoutsBtn">Refresh</button>
+    </div>
+    <div class="library-bar" id="libraryBar">
+      <input id="librarySearch" type="search" placeholder="Search titles" aria-label="Search puzzles" autocomplete="off" spellcheck="false">
+      <div class="volume-filters" id="volumeFilters" role="group" aria-label="Volume"></div>
+      <span class="library-count" id="libraryCount"></span>
     </div>
     <ul class="layout-list" id="layoutList"></ul>
     <p class="layouts-status" id="layoutsStatus"></p>
@@ -1167,6 +1311,9 @@
     let loadedLayoutMine = false;
     /** @type {{ id: string, title: string, width: number, height: number, updated_at?: string }[]} */
     let savedLayouts = [];
+    let libraryQuery = '';
+    let libraryVolume = 'all';
+    let revealLibraryCurrent = false;
     let layoutsQueue = Promise.resolve();
     let googleAccount = null;
     let googleClientId = '';
@@ -1203,6 +1350,14 @@
       layoutTitle: document.getElementById('layoutTitle'),
       includeMarks: document.getElementById('includeMarks'),
       layoutList: document.getElementById('layoutList'),
+      librarySearch: document.getElementById('librarySearch'),
+      volumeFilters: document.getElementById('volumeFilters'),
+      libraryCount: document.getElementById('libraryCount'),
+      puzzleNav: document.getElementById('puzzleNav'),
+      prevPuzzleBtn: document.getElementById('prevPuzzleBtn'),
+      nextPuzzleBtn: document.getElementById('nextPuzzleBtn'),
+      puzzleNavTitle: document.getElementById('puzzleNavTitle'),
+      puzzleNavCount: document.getElementById('puzzleNavCount'),
       importStatus: document.getElementById('importStatus'),
       boardPaste: document.getElementById('boardPaste'),
       convertPasteBtn: document.getElementById('convertPasteBtn'),
@@ -2374,7 +2529,8 @@
         // unless most of the board, or most of the viewport, is already showing.
         const wants = Math.min(rect.height, window.innerHeight * 0.62);
         if (visibleHeight + 1 < wants) {
-          els.gridWrap.scrollIntoView({ block: 'start', inline: 'nearest' });
+          const anchor = els.puzzleNav.hidden ? els.gridWrap : els.puzzleNav;
+          anchor.scrollIntoView({ block: 'start', inline: 'nearest' });
           requestAnimationFrame(() => updateCellSize());
         }
       });
@@ -2694,24 +2850,88 @@
       return `${layout.title} (${layout.width}×${layout.height}${when ? `, ${when}` : ''})`;
     }
 
+    function volumeOf(title) {
+      const match = String(title || '').match(/vol\s*(\d+)/i);
+      return match ? `Vol${Number(match[1])}` : '';
+    }
+
+    function volumeChoices(layouts) {
+      const nums = new Set();
+      let other = false;
+      for (const layout of layouts) {
+        const vol = volumeOf(layout.title);
+        if (vol) nums.add(Number(vol.slice(3)));
+        else other = true;
+      }
+      const choices = [...nums].sort((a, b) => a - b).map((n) => `Vol${n}`);
+      if (other) choices.push('Other');
+      return choices;
+    }
+
+    function layoutVisible(layout) {
+      const vol = volumeOf(layout.title) || 'Other';
+      if (libraryVolume !== 'all' && vol !== libraryVolume) return false;
+      const query = libraryQuery.trim().toLowerCase();
+      if (!query) return true;
+      return String(layout.title || '').toLowerCase().includes(query);
+    }
+
+    function renderVolumeFilters() {
+      const choices = volumeChoices(savedLayouts);
+      if (libraryVolume !== 'all' && !choices.includes(libraryVolume)) libraryVolume = 'all';
+      els.volumeFilters.replaceChildren();
+      if (!savedLayouts.length) return;
+      for (const label of ['All', ...choices]) {
+        const key = label === 'All' ? 'all' : label;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = label;
+        button.setAttribute('aria-pressed', libraryVolume === key ? 'true' : 'false');
+        button.addEventListener('click', () => {
+          libraryVolume = key;
+          renderLayoutList(savedLayouts);
+        });
+        els.volumeFilters.appendChild(button);
+      }
+    }
+
     function renderLayoutList(layouts) {
       savedLayouts = layouts;
+      renderVolumeFilters();
+      const visible = layouts.filter(layoutVisible);
+      els.libraryCount.textContent = layouts.length
+        ? (visible.length === layouts.length
+          ? `${layouts.length} puzzle${layouts.length === 1 ? '' : 's'}`
+          : `${visible.length} of ${layouts.length}`)
+        : '';
       els.layoutList.replaceChildren();
-      if (!layouts.length) {
+      if (!layouts.length || !visible.length) {
         const empty = document.createElement('li');
         empty.className = 'layout-empty';
-        empty.textContent = 'No saved puzzles yet.';
+        empty.textContent = layouts.length ? 'No puzzles match.' : 'No saved puzzles yet.';
         els.layoutList.appendChild(empty);
-        syncUpdateButton();
-        return;
-      }
-      for (const layout of layouts) {
+      } else for (const layout of visible) {
         const item = document.createElement('li');
-        if (layout.id === loadedLayoutId) item.classList.add('current');
         const open = document.createElement('button');
         open.type = 'button';
         open.className = 'layout-open';
-        open.textContent = layoutLabel(layout);
+        const title = document.createElement('span');
+        title.className = 'layout-title';
+        title.textContent = layout.title;
+        open.appendChild(title);
+        if (canEditLayout()) {
+          const meta = document.createElement('span');
+          meta.className = 'layout-meta';
+          const when = layout.updated_at ? layout.updated_at.slice(0, 16).replace('T', ' ') : '';
+          meta.textContent = `${layout.width}×${layout.height}${when ? ` · ${when}` : ''}`;
+          open.appendChild(meta);
+          const label = layoutLabel(layout);
+          if (label !== layout.title) open.title = label;
+        }
+        if (layout.id === loadedLayoutId) {
+          item.classList.add('current');
+          open.setAttribute('aria-current', 'true');
+        }
         open.addEventListener('click', () => withStatus(() => loadLayoutById(layout.id)));
         if (layout.mine) {
           const remove = document.createElement('button');
@@ -2726,12 +2946,56 @@
         els.layoutList.appendChild(item);
       }
       syncUpdateButton();
+      if (revealLibraryCurrent) {
+        revealLibraryCurrent = false;
+        revealCurrentInLibrary();
+      }
+    }
+
+    function revealCurrentInLibrary() {
+      const current = els.layoutList.querySelector('li.current');
+      if (!(current instanceof HTMLElement)) return;
+      const list = els.layoutList;
+      const listRect = list.getBoundingClientRect();
+      const itemRect = current.getBoundingClientRect();
+      if (itemRect.top < listRect.top) list.scrollTop -= listRect.top - itemRect.top;
+      else if (itemRect.bottom > listRect.bottom) list.scrollTop += itemRect.bottom - listRect.bottom;
+    }
+
+    function loadedLibraryIndex() {
+      if (!loadedLayoutId) return -1;
+      return savedLayouts.findIndex((layout) => layout.id === loadedLayoutId);
+    }
+
+    function syncPuzzleNav() {
+      const index = loadedLibraryIndex();
+      const show = index >= 0 && els.workspace.classList.contains('visible');
+      els.puzzleNav.hidden = !show;
+      els.prevPuzzleBtn.disabled = index <= 0;
+      els.nextPuzzleBtn.disabled = index < 0 || index >= savedLayouts.length - 1;
+      els.puzzleNavTitle.textContent = show ? savedLayouts[index].title : '';
+      els.puzzleNavCount.textContent = show ? `${index + 1} of ${savedLayouts.length}` : '';
+    }
+
+    async function stepPuzzle(delta) {
+      const index = loadedLibraryIndex();
+      const next = index + delta;
+      if (index < 0 || next < 0 || next >= savedLayouts.length) return;
+      const layout = savedLayouts[next];
+      const vol = volumeOf(layout.title) || 'Other';
+      if (libraryVolume !== 'all' && libraryVolume !== vol) libraryVolume = vol;
+      if (!layoutVisible(layout)) {
+        libraryQuery = '';
+        els.librarySearch.value = '';
+      }
+      await loadLayoutById(layout.id);
     }
 
     function syncUpdateButton() {
       const current = savedLayouts.find((layout) => layout.id === loadedLayoutId);
       loadedLayoutMine = !!current?.mine;
       els.updateLayoutBtn.disabled = !loadedLayoutMine;
+      syncPuzzleNav();
     }
 
     async function refreshLayouts(silent) {
@@ -2804,6 +3068,7 @@
     async function loadLayoutById(id) {
       const { layout } = await api(`/api/layouts/${id}`);
       applySavedLayout(layout);
+      revealLibraryCurrent = true;
       renderLayoutList(savedLayouts);
       setLayoutStatus(`Loaded "${layout.title}".`, 'ok');
     }
@@ -2883,6 +3148,12 @@
     els.saveLayoutBtn.addEventListener('click', () => withStatus(saveLayout));
     els.updateLayoutBtn.addEventListener('click', () => withStatus(updateSavedLayout));
     els.refreshLayoutsBtn.addEventListener('click', () => withStatus(() => refreshLayouts()));
+    els.librarySearch.addEventListener('input', () => {
+      libraryQuery = els.librarySearch.value;
+      renderLayoutList(savedLayouts);
+    });
+    els.prevPuzzleBtn.addEventListener('click', () => withStatus(() => stepPuzzle(-1)));
+    els.nextPuzzleBtn.addEventListener('click', () => withStatus(() => stepPuzzle(1)));
     bootAccount();
     els.undoBtn.addEventListener('click', undo);
     els.clearBtn.addEventListener('click', () => {
@@ -2919,6 +3190,13 @@
       if (e.key === 'z' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         undo();
+        return;
+      }
+
+      if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.repeat) {
+        if (loadedLibraryIndex() < 0) return;
+        e.preventDefault();
+        withStatus(() => stepPuzzle(e.key === 'ArrowLeft' ? -1 : 1));
         return;
       }
 

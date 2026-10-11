@@ -19,7 +19,7 @@ Set the grid size, then mark the puzzle as you work:
 - **Room walls and windows** — click an internal edge to cycle wall, window, and open. Drag draws or clears solid walls. A window is a wall with a gap in the middle. Sign in to edit them.
 - **Character colors** — A–Z (and V for the victim) each have their own color
 - **Create grid / Open a board** — set a size, paste a playground board, or import JSON. Sign in to use these
-- **Saved puzzles** — the list of every saved layout is visible without an account. Titles such as Vol1 #5 come before Vol1 #11. Unsigned visitors see the title only. Sign in to create a grid, open a board, edit walls, windows, furniture, and obstacles, or to save, update, or delete your own.
+- **Saved puzzles** — the list of every saved layout is visible without an account. Titles such as Vol1 #5 come before Vol1 #11. Unsigned visitors see titles only, in a searchable list with volume filters. Previous and next, including the left and right arrow keys, move through that order and stop at the ends. Sign in to create a grid, open a board, edit walls, windows, furniture, and obstacles, or to save, update, or delete your own.
 
 Keyboard shortcuts: letter keys select a character, `X` for mark-X mode, `O` for obstacles, `E` for erase.
 
@@ -27,7 +27,7 @@ Clear all removes pencil marks, placements, and X cells. Room walls and objects 
 
 ## Auth
 
-Anyone can list and open saved puzzles. Without Google sign-in the page is load-and-view: the library is a row of titles, the board sits in front, and a legend shows furniture and obstacle icons. Create grid, Open a board, and the wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work. Save, update, and delete need Google sign-in. A new puzzle is stored under that token’s `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`. The list puts numbered titles first, in numeric order, then other titles newest first.
+Anyone can list and open saved puzzles. Without Google sign-in the page is load-and-view: the library is a searchable list of titles with volume filters, the board sits in front, and a legend shows furniture and obstacle icons. Previous and next (and the arrow keys) open the neighboring puzzle in that sorted list and stop at the first and last titles. Create grid, Open a board, and the wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work. Save, update, and delete need Google sign-in. A new puzzle is stored under that token’s `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`. The list puts numbered titles first, in numeric order, then other titles newest first.
 
 The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`).
 
