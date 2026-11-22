@@ -216,13 +216,23 @@ function runCli(args) {
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
     req.on("end", () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
       posted.push({
         url: req.url,
-        authorization: req.headers.authorization,
-        body: JSON.parse(Buffer.concat(chunks).toString("utf8")),
+        authorization: req.headers.authorization || "",
+        cookie: req.headers.cookie || "",
+        body,
       });
+      if (req.url === "/api/session") {
+        res.writeHead(200, {
+          "content-type": "application/json",
+          "set-cookie": "murdoku_session=session-from-cli; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000",
+        });
+        res.end(JSON.stringify({ signedIn: true, email: "cli@example.com" }));
+        return;
+      }
       res.writeHead(201, { "content-type": "application/json" });
-      res.end(JSON.stringify({ layout: { id: "posted-1", title: posted[0].body.title } }));
+      res.end(JSON.stringify({ layout: { id: "posted-1", title: body.title } }));
     });
   });
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -236,11 +246,15 @@ function runCli(args) {
   ]);
   server.close();
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].url, "/api/layouts");
-  assert.equal(posted[0].authorization, "Bearer cli-key");
-  assert.equal(posted[0].body.title, "Garden path");
-  assert.equal(posted[0].body.objects[0].id, "tree");
+  assert.equal(posted.length, 2);
+  assert.equal(posted[0].url, "/api/session");
+  assert.equal(posted[0].authorization, "");
+  assert.equal(posted[0].body.credential, "cli-key");
+  assert.equal(posted[1].url, "/api/layouts");
+  assert.equal(posted[1].authorization, "");
+  assert.equal(posted[1].cookie, "murdoku_session=session-from-cli");
+  assert.equal(posted[1].body.title, "Garden path");
+  assert.equal(posted[1].body.objects[0].id, "tree");
   assert.equal(JSON.parse(result.stdout).layout.id, "posted-1");
 }
 

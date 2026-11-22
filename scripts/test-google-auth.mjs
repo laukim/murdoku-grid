@@ -65,6 +65,8 @@ const files = [
   "worker/index.js",
   "worker/layouts-api.js",
   "worker/layouts.js",
+  "worker/session.js",
+  "worker/session-api.js",
   "js/google-jwt.js",
   "js/google-client.js",
   "js/google-account.js",
@@ -80,5 +82,8 @@ for (const file of files) {
 const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 assert.equal(/id="accessKey"/.test(page), false);
 assert.match(page, /Sign in with Google to save layouts/);
+assert.match(page, /auto_select: false/);
+assert.match(page, /\/api\/session/);
+assert.doesNotMatch(page, /writeGoogleToken\(localStorage, token\)/);
 
 console.log("google auth tests passed");
