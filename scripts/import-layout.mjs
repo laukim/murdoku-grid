@@ -11,8 +11,9 @@ Reads a local layout file (room-map JSON, thick-edge JSON, or pasted board
 HTML) and prints the grid-helper layout. --sql prints a D1 INSERT. Pass
 --user-sub with the Google account sub so that row shows up for that sign-in.
 --post sends it to a Worker /api/layouts endpoint. --key or GOOGLE_ID_TOKEN
-is a Google ID token, not a shared secret. This command does not download
-remote catalogs.`);
+is a Google ID token. The command exchanges it at POST /api/session, then
+sends the session cookie. It is not a shared secret. This command does not
+download remote catalogs.`);
   process.exit(args.length === 0 ? 1 : 0);
 }
 
@@ -41,7 +42,7 @@ if (asSql && postUrl) {
   fail("Use either --sql or --post.");
 }
 if (postUrl && !key) {
-  fail("Set --key or GOOGLE_ID_TOKEN to post a layout. Use a Google ID token.");
+  fail("Set --key or GOOGLE_ID_TOKEN to post a layout. Use a Google ID token. The command exchanges it for a session cookie.");
 }
 
 const text = readFileSync(file, "utf8");
@@ -61,10 +62,19 @@ try {
 if (asSql) {
   console.log(layoutInsertSql(layout, { userSub }));
 } else if (postUrl) {
+  const sessionResponse = await fetch(new URL("/api/session", postUrl), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ credential: key }),
+  });
+  const sessionText = await sessionResponse.text();
+  if (!sessionResponse.ok) fail(sessionText || `Sign-in failed (${sessionResponse.status})`);
+  const cookie = sessionCookieHeader(sessionResponse);
+  if (!cookie) fail("Sign-in did not return a session cookie.");
   const response = await fetch(new URL("/api/layouts", postUrl), {
     method: "POST",
     headers: {
-      authorization: `Bearer ${key}`,
+      cookie,
       "content-type": "application/json",
     },
     body: JSON.stringify(layout),
@@ -74,6 +84,15 @@ if (asSql) {
   console.log(bodyText);
 } else {
   console.log(JSON.stringify(layout, null, 2));
+}
+
+function sessionCookieHeader(response) {
+  const fromList = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
+  const lines = fromList.length ? fromList : [response.headers.get("set-cookie") || ""];
+  return lines
+    .map((line) => String(line).split(";")[0].trim())
+    .filter((part) => part.includes("="))
+    .join("; ");
 }
 
 function flagValue(name) {

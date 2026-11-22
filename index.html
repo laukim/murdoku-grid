@@ -1374,6 +1374,7 @@
     let layoutsQueue = Promise.resolve();
     let googleAccount = null;
     let googleClientId = '';
+    let signedIn = false;
 
     const els = {
       rows: document.getElementById('rows'),
@@ -2663,18 +2664,8 @@
       googleClientId = client.GOOGLE_CLIENT_ID;
     }
 
-    function currentToken() {
-      if (!googleAccount) return '';
-      try {
-        const token = googleAccount.readGoogleToken(localStorage);
-        return googleAccount.tokenUsable(token) ? token : '';
-      } catch {
-        return '';
-      }
-    }
-
     function canEditLayout() {
-      return !!currentToken();
+      return signedIn;
     }
 
     function syncLayoutEditing() {
@@ -2701,6 +2692,7 @@
     }
 
     function paintSignedOut() {
+      signedIn = false;
       els.layoutsPanel.hidden = false;
       els.layoutWrites.hidden = true;
       els.signInBtn.hidden = false;
@@ -2719,6 +2711,7 @@
     }
 
     function paintSignedIn(email) {
+      signedIn = true;
       els.layoutsPanel.hidden = false;
       els.layoutWrites.hidden = false;
       els.signInBtn.hidden = true;
@@ -2730,18 +2723,12 @@
       syncLayoutEditing();
     }
 
-    function clearGoogleSession() {
+    function clearStoredGoogleToken() {
       try {
         if (googleAccount) googleAccount.writeGoogleToken(localStorage, '');
       } catch {
-        // Private browsing can block storage. The board still works in this tab.
+        // Private browsing can block storage. The session cookie is what matters.
       }
-      try {
-        window.google?.accounts?.id?.disableAutoSelect();
-      } catch {
-        // Google Identity Services may not have loaded.
-      }
-      paintSignedOut();
     }
 
     function loadGisScript() {
@@ -2799,35 +2786,54 @@
       if (!googleAccount?.tokenUsable(token)) {
         throw new Error('Google did not return a usable sign-in. The board is unchanged.');
       }
-      googleAccount.writeGoogleToken(localStorage, token);
-      const email = googleAccount.decodeJwtPayload(token)?.email || 'Signed in';
-      paintSignedIn(email);
+      const session = await api('/api/session', {
+        method: 'POST',
+        body: { credential: token },
+      });
+      if (!session.signedIn) {
+        throw new Error('Google did not return a usable sign-in. The board is unchanged.');
+      }
+      clearStoredGoogleToken();
+      paintSignedIn(session.email || 'Signed in');
       const list = await refreshLayouts(true);
       const count = list.length;
       setLayoutStatus(`Signed in. ${count} saved puzzle${count === 1 ? '' : 's'}.`, 'ok');
     }
 
-    function signOut() {
-      clearGoogleSession();
-      withStatus(() => refreshLayouts(true));
+    async function signOut() {
+      await api('/api/session/logout', { method: 'POST' });
+      clearStoredGoogleToken();
+      try {
+        window.google?.accounts?.id?.disableAutoSelect();
+      } catch {
+        // Google Identity Services may not have loaded.
+      }
+      paintSignedOut();
+      await refreshLayouts(true);
+      setLayoutStatus('Signed out.', 'ok');
     }
 
     async function bootAccount() {
       try {
         await loadGoogleModules();
+        clearStoredGoogleToken();
+      } catch {
+        // The sign-in button needs these modules. A stored session cookie does not.
+      }
+      try {
+        const session = await api('/api/session');
+        if (session.signedIn) {
+          paintSignedIn(session.email || 'Signed in');
+        } else {
+          paintSignedOut();
+          try {
+            await mountGoogleButton();
+          } catch {
+            paintSignedOut();
+          }
+        }
       } catch {
         paintSignedOut();
-      }
-      if (currentToken()) {
-        const email = googleAccount.decodeJwtPayload(currentToken())?.email || 'Signed in';
-        paintSignedIn(email);
-      } else {
-        paintSignedOut();
-        try {
-          await mountGoogleButton();
-        } catch {
-          paintSignedOut();
-        }
       }
       withStatus(() => refreshLayouts());
     }
@@ -2847,16 +2853,16 @@
     }
 
     async function api(path, { method = 'GET', body, auth = false } = {}) {
-      const token = currentToken();
-      if (auth && !token) throw new Error('Sign in with Google to save layouts.');
+      if (auth && !signedIn) throw new Error('Sign in with Google to save layouts.');
       const headers = {};
-      if (token) headers.authorization = `Bearer ${token}`;
       if (body !== undefined) headers['content-type'] = 'application/json';
       let response;
       try {
         response = await fetch(path, {
           method,
           headers,
+          credentials: 'same-origin',
+          cache: 'no-store',
           body: body !== undefined ? JSON.stringify(body) : undefined,
         });
       } catch {
@@ -2868,7 +2874,7 @@
         try { payload = JSON.parse(text); } catch { payload = null; }
       }
       if (response.status === 401 && auth) {
-        clearGoogleSession();
+        paintSignedOut();
         throw new Error('Sign in with Google to save layouts.');
       }
       if (!response.ok) throw new Error(payload?.error || `Request failed (${response.status})`);
@@ -3165,7 +3171,7 @@
         `Imported "${layout.title}" (${layout.width}×${layout.height}, ${wallCount} wall${wallCount === 1 ? '' : 's'}${windowNote}${objectNote}).`,
         'ok',
       );
-      if (currentToken()) renderLayoutList(savedLayouts);
+      if (signedIn) renderLayoutList(savedLayouts);
     }
 
     async function importLayoutFromFile(file) {
@@ -3195,7 +3201,7 @@
     });
     els.createBtn.addEventListener('click', initGrid);
     els.signInBtn.addEventListener('click', () => withStatus(mountGoogleButton, setLayoutStatus));
-    els.signOutBtn.addEventListener('click', signOut);
+    els.signOutBtn.addEventListener('click', () => withStatus(signOut));
     els.convertPasteBtn.addEventListener('click', () => withStatus(convertPastedBoard, setImportStatus));
     els.importLayoutBtn.addEventListener('click', () => {
       if (!canEditLayout()) return;

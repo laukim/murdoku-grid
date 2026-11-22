@@ -27,11 +27,25 @@ Clear all removes pencil marks, placements, and X cells. Room walls and objects 
 
 ## Auth
 
-Anyone can list and open saved puzzles. Without Google sign-in the page is load-and-view: the library is a searchable list of titles with volume filters, the board sits in front, and a legend shows furniture and obstacle icons. Previous and next (and the arrow keys) open the neighboring puzzle in that sorted list and stop at the first and last titles. Create grid, Open a board, and the wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work. Save, update, and delete need Google sign-in. A new puzzle is stored under that token’s `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`. The list puts numbered titles first, in numeric order, then other titles newest first.
+Anyone can list and open saved puzzles. Without sign-in the page is load-and-view: the library is a searchable list of titles with volume filters, the board sits in front, and a legend shows furniture and obstacle icons. Previous and next (and the arrow keys) open the neighboring puzzle in that sorted list and stop at the first and last titles. Create grid, Open a board, and the wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work. Save, update, and delete need a signed-in session. A new puzzle is stored under the Google account `sub`. Update and delete only change rows with the same `sub`. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`. The list puts numbered titles first, in numeric order, then other titles newest first.
 
-The page uses Google Identity Services with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. The Worker checks the ID token with Google’s published keys (RS256, `accounts.google.com`, `email_verified`).
+The page still uses Google Identity Services for the sign-in button, with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret and no email allowlist. `auto_select` stays false. Google is only the first identity check: the browser posts the ID token once to `POST /api/session`. The Worker checks it with Google’s published keys (RS256, `accounts.google.com`, `email_verified`), then forgets it.
 
-`GET /api/layouts` and `GET /api/layouts/:id` do not require a token. A usable token may be sent on those reads; matching rows then include `mine: true`. A missing or invalid token on `POST`, `PUT`, or `DELETE` returns `401` `{ "error": "Sign in required" }`. Changing someone else’s row returns `404`. The browser keeps a usable ID token in `localStorage` under `murdoku-grid.google-id-token`.
+After that check the Worker sets its own session cookie, `murdoku_session`. The cookie is HttpOnly, Secure, and SameSite=Lax, and it lasts 30 days. It is an HMAC-SHA256 JWT signed with the `SESSION_SECRET` Worker secret. The payload is the Google `sub`, an optional email for the account bar, and `exp`. Layout list, read, create, update, and delete calls authenticate from this cookie. A Google ID token in `Authorization` does not authenticate those calls. Reloading the page calls `GET /api/session` and stays signed in until the cookie expires or the user clicks Sign out. Sign out calls `POST /api/session/logout`, which clears the cookie. The old `localStorage` key `murdoku-grid.google-id-token` is deleted on boot and is not the session.
+
+`GET /api/layouts` and `GET /api/layouts/:id` do not require a session. A valid session cookie may be sent on those reads; matching rows then include `mine: true`. A missing or invalid session on `POST`, `PUT`, or `DELETE` returns `401` `{ "error": "Sign in required" }`. An expired or tampered cookie is cleared. Changing someone else’s row returns `404`.
+
+### Session secret
+
+Generate a secret of at least 32 characters and store it as a Worker secret. Do not commit it, and do not put it in `wrangler.jsonc`.
+
+```bash
+openssl rand -base64 32 | npx wrangler secret put SESSION_SECRET
+```
+
+For local Wrangler (`npm run dev`), copy `.dev.vars.example` to `.dev.vars` and set `SESSION_SECRET` there. `.dev.vars` is gitignored. `npm run dev:local` reads `.dev.vars` when `SESSION_SECRET` is not already in the environment. Unsigned play works without the secret. Sign-in returns `{ "error": "Session signing is not configured" }` until it is set.
+
+The cookie is `Secure`, so the browser stores it on `https://` and on `http://localhost`. Local sign-in should use `http://localhost:8787`.
 
 Sign-in from the deployed host needs this authorized JavaScript origin on that same OAuth client in Google Cloud:
 
@@ -44,11 +58,14 @@ This repo cannot change the Google Cloud console. Add the origin there before th
 
 | Method | Path | Body | Result |
 | --- | --- | --- | --- |
-| `GET` | `/api/layouts` | | `{ layouts: [{ id, title, width, height, created_at, updated_at, mine? }] }` for every saved layout. No auth. `mine: true` when the optional bearer owns that row |
-| `POST` | `/api/layouts` | layout | `201 { layout }`. Google sign-in required |
-| `GET` | `/api/layouts/:id` | | `{ layout }` for any saved id. No auth. `mine: true` when the optional bearer owns it |
-| `PUT` | `/api/layouts/:id` | layout | `{ layout }`. Google sign-in required, and only for that account’s row |
-| `DELETE` | `/api/layouts/:id` | | `{ ok: true }`. Google sign-in required, and only for that account’s row |
+| `GET` | `/api/session` | | `{ signedIn, email? }` from the session cookie. No Google token. `signedIn: false` when the cookie is missing, expired, or invalid; an unusable cookie is cleared |
+| `POST` | `/api/session` | `{ "credential": "<Google ID token>" }` | Verifies the Google token once, sets the 30-day session cookie, `{ signedIn: true, email }`. `401` when the token is rejected. `500` when `SESSION_SECRET` is missing |
+| `POST` | `/api/session/logout` | | Clears the session cookie when the request sent one. `{ signedIn: false }` |
+| `GET` | `/api/layouts` | | `{ layouts: [{ id, title, width, height, created_at, updated_at, mine? }] }` for every saved layout. No auth. `mine: true` when the session cookie owns that row |
+| `POST` | `/api/layouts` | layout | `201 { layout }`. Session cookie required |
+| `GET` | `/api/layouts/:id` | | `{ layout }` for any saved id. No auth. `mine: true` when the session cookie owns it |
+| `PUT` | `/api/layouts/:id` | layout | `{ layout }`. Session cookie required, and only for that account’s row |
+| `DELETE` | `/api/layouts/:id` | | `{ ok: true }`. Session cookie required, and only for that account’s row |
 
 `width` is the column count and `height` is the row count (2–20). A layout body:
 
@@ -108,7 +125,7 @@ node scripts/import-layout.mjs ./my-layout.json \
   --key "$GOOGLE_ID_TOKEN"
 ```
 
-`--title` replaces the title in the file. `--key` and `GOOGLE_ID_TOKEN` are a Google ID token from a signed-in browser. `--sql` can take `--user-sub` so the inserted row belongs to that Google account; an empty `user_sub` stays hidden from every signed-in list. The command rejects an `http://` or `https://` path. The same command accepts a pasted board saved as a local `.html` file.
+`--title` replaces the title in the file. `--key` and `GOOGLE_ID_TOKEN` are a Google ID token. `--post` exchanges that token at `POST /api/session`, then sends the session cookie with the layout. It is not a shared secret. `--sql` can take `--user-sub` so the inserted row belongs to that Google account; an empty `user_sub` stays hidden from every signed-in list. The command rejects an `http://` or `https://` path. The same command accepts a pasted board saved as a local `.html` file.
 
 ## Playground board paste
 
@@ -158,15 +175,15 @@ API tests use an in-memory D1 stand-in (no Cloudflare login):
 npm test
 ```
 
-Click through the UI the same way. The board, paste, and import work before sign-in. Save and load ask for Google:
+Click through the UI the same way. The board, paste, and import work before sign-in. Save and load ask for Google, which needs `SESSION_SECRET` in `.dev.vars` (see above).
 
 ```bash
 npm run dev:local
 ```
 
-Open http://127.0.0.1:8787.
+Open http://localhost:8787 so the browser will store the Secure session cookie. `http://127.0.0.1:8787` still serves the page for unsigned play.
 
-Wrangler’s local runtime does not need a secret:
+Wrangler’s local runtime reads `.dev.vars`:
 
 ```bash
 npm install
@@ -182,15 +199,16 @@ The D1 database already exists in the Cloudflare account:
 
 That id is in `wrangler.jsonc`. `layouts` is already created there, so the migration’s `CREATE TABLE IF NOT EXISTS` is safe and records Wrangler’s migration history.
 
-This environment could not finish `wrangler deploy`: there is no Wrangler API token, and the assets upload session token cannot be attached from here. From a machine logged in with `npx wrangler login` (or `CLOUDFLARE_API_TOKEN`):
+From a machine logged in with `npx wrangler login` (or `CLOUDFLARE_API_TOKEN`):
 
 ```bash
+openssl rand -base64 32 | npx wrangler secret put SESSION_SECRET
 npm install
 npm run db:migrate
 npm run deploy
 ```
 
-`deploy.sh` applies the remote migration and deploys. There is no access-key secret to set. After deploy, add `https://murdoku-grid.mocholate.workers.dev` as an authorized JavaScript origin on the Google OAuth client so sign-in can complete.
+`deploy.sh` applies the remote migration and deploys. It does not set `SESSION_SECRET`. Set that secret before relying on sign-in. Unsigned play still works if the secret is missing; `POST /api/session` then returns 500. After deploy, add `https://murdoku-grid.mocholate.workers.dev` as an authorized JavaScript origin on the Google OAuth client so the Google button can finish. The button is unchanged. The Worker session is what keeps the account signed in.
 
 Workers assets serve `index.html`. `/api/*` runs the Worker first, same pattern as `laukim/cube-learning` (`3x3coach`). `.assetsignore` keeps the Worker source, migrations, and `node_modules` off the public asset upload.
 

@@ -1,5 +1,7 @@
 import { base64UrlToBytes } from "./google-jwt.js";
 
+// Legacy key from when the page stored the Google ID token. Boot deletes it.
+// The signed-in session is the HttpOnly cookie set by POST /api/session.
 export const GOOGLE_TOKEN_KEY = "murdoku-grid.google-id-token";
 
 export function readGoogleToken(store) {

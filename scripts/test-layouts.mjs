@@ -3,15 +3,24 @@ import { readFileSync } from "node:fs";
 import { LocalD1 } from "./local-d1.js";
 import { SCHEMA_SQL } from "../worker/schema.js";
 import { handleLayoutsRequest } from "../worker/layouts-api.js";
+import { issueSession, SESSION_COOKIE } from "../worker/session.js";
 import worker from "../worker/index.js";
 
-const KIM = "kim-token";
-const OTHER = "other-token";
+const SECRET = "test-session-secret-do-not-use-in-prod!!";
+const KIM = "kim";
+const OTHER = "other";
+const cookieCache = new Map();
 
-async function verify(token) {
-  if (token === KIM) return { sub: "kim-sub", email: "kim.lau817@gmail.com" };
-  if (token === OTHER) return { sub: "other-sub", email: "other@example.com" };
-  throw new Error("bad token");
+async function cookieHeader(key) {
+  if (key == null) return "";
+  const identity = key === KIM
+    ? { sub: "kim-sub", email: "kim.lau817@gmail.com" }
+    : key === OTHER
+      ? { sub: "other-sub", email: "other@example.com" }
+      : null;
+  if (!identity) return `${SESSION_COOKIE}=${key}`;
+  if (!cookieCache.has(key)) cookieCache.set(key, await issueSession(identity, SECRET));
+  return `${SESSION_COOKIE}=${cookieCache.get(key)}`;
 }
 
 function clock(start = "2026-10-08T12:00:00.000Z") {
@@ -26,12 +35,13 @@ function ids() {
 }
 
 function envWith(db) {
-  return { DB: db };
+  return { DB: db, SESSION_SECRET: SECRET };
 }
 
 async function call(env, method, path, { key = KIM, body, deps } = {}) {
   const headers = new Headers();
-  if (key != null) headers.set("authorization", `Bearer ${key}`);
+  const cookie = await cookieHeader(key);
+  if (cookie) headers.set("cookie", cookie);
   let payload;
   if (body !== undefined) {
     payload = JSON.stringify(body);
@@ -42,7 +52,7 @@ async function call(env, method, path, { key = KIM, body, deps } = {}) {
     headers,
     body: payload,
   });
-  const response = await handleLayoutsRequest(request, env, { verify, ...deps });
+  const response = await handleLayoutsRequest(request, env, deps);
   const text = await response.text();
   return { status: response.status, body: text ? JSON.parse(text) : null };
 }
@@ -73,6 +83,13 @@ assert.doesNotMatch(html, /id="layoutSelect"/);
 assert.doesNotMatch(html, /id="accessKey"/);
 assert.doesNotMatch(html, /Sign in to see saved layouts/);
 assert.match(html, /Sign in with Google/);
+assert.match(html, /auto_select: false/);
+assert.match(html, /\/api\/session\/logout/);
+assert.match(html, /credentials: 'same-origin'/);
+assert.match(html, /cache: 'no-store'/);
+assert.match(html, /let signedIn = false/);
+assert.doesNotMatch(html, /authorization = `Bearer/);
+assert.doesNotMatch(html, /writeGoogleToken\(localStorage, token\)/);
 const layoutsSource = readFileSync(new URL("../worker/layouts.js", import.meta.url), "utf8");
 assert.doesNotMatch(layoutsSource, /LIMIT\s+\d+/);
 assert.match(html, /data-mode="x"/);
