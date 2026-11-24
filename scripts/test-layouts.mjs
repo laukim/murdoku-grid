@@ -274,6 +274,29 @@ const deps = { now: clock(), id: ids() };
     { r: 0, c: 0, id: "boulder" },
     { r: 1, c: 2, id: "rubble" },
   ]));
+
+  const yard = await call(env, "POST", "/api/layouts", {
+    body: sample({
+      title: "Yard",
+      objects: [
+        { r: 1, c: 1, id: "bush" },
+        { r: 0, c: 0, id: "horse" },
+        { r: 0, c: 2, id: "crate" },
+      ],
+    }),
+    deps,
+  });
+  assert.equal(yard.status, 201);
+  assert.deepEqual(yard.body.layout.objects, [
+    { r: 0, c: 0, id: "horse" },
+    { r: 0, c: 2, id: "crate" },
+    { r: 1, c: 1, id: "bush" },
+  ]);
+  const yardRow = await db.prepare("SELECT objects_json FROM layouts WHERE id = ?").bind(yard.body.layout.id).first();
+  assert.equal(yardRow.objects_json, JSON.stringify(yard.body.layout.objects));
+  const yardGet = await call(env, "GET", `/api/layouts/${yard.body.layout.id}`, { key: null });
+  assert.equal(yardGet.status, 200);
+  assert.deepEqual(yardGet.body.layout.objects, yard.body.layout.objects);
 }
 
 {
