@@ -196,6 +196,8 @@ Workers Builds deploys this Worker automatically on a push or merge to `main`. T
 
 Connecting the repository leaves the commits already on `main` unpublished. A new commit on `main` triggers the first production build. Later pushes and merges to `main` deploy the same way. [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) documents this connection.
 
+A push to a branch other than `main` runs `npx wrangler preview`. `wrangler.jsonc` includes an empty `previews` block so that command can run. The block does not copy the production D1 binding.
+
 The D1 database already exists in the Cloudflare account:
 
 - name: `murdoku-layouts`
