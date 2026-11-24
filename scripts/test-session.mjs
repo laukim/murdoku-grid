@@ -21,6 +21,7 @@ async function verify(token) {
   if (token === "good-google") return { sub: "kim-sub", email: "kim.lau817@gmail.com" };
   if (token === "other-google") return { sub: "other-sub", email: "other@example.com" };
   if (token === "no-email") return { sub: "no-email-sub" };
+  if (token === "mocho-google") return { sub: "mocho-sub", email: "Mocholateio@gmail.com" };
   throw new Error("bad token");
 }
 
@@ -137,6 +138,7 @@ const issued = await read(await handleSessionRequest(
 assert.equal(issued.status, 200);
 assert.equal(issued.body.signedIn, true);
 assert.equal(issued.body.email, "kim.lau817@gmail.com");
+assert.equal(issued.body.canUpdateAny, true);
 assert.equal(issued.body.sub, undefined);
 assert.equal(issued.cookies.length, 1);
 const kimToken = assertLiveCookie(issued.cookies[0]);
@@ -153,6 +155,7 @@ const reloaded = await read(await handleSessionRequest(request("GET", "/api/sess
 assert.equal(reloaded.status, 200);
 assert.equal(reloaded.body.signedIn, true);
 assert.equal(reloaded.body.email, "kim.lau817@gmail.com");
+assert.equal(reloaded.body.canUpdateAny, true);
 assert.equal(reloaded.cookies.length, 0);
 
 const anonymous = await read(await handleSessionRequest(request("GET", "/api/session"), env));
@@ -166,6 +169,7 @@ assert.deepEqual(anonymous.body, { signedIn: false });
   ));
   assert.equal(noEmail.status, 200);
   assert.equal(noEmail.body.email, "");
+  assert.equal(noEmail.body.canUpdateAny, undefined);
   const identity = await verifySession(tokenFrom(noEmail.cookies[0]), SECRET);
   assert.equal(identity.sub, "no-email-sub");
   assert.equal(identity.email, "");
@@ -177,6 +181,18 @@ const otherIssued = await read(await handleSessionRequest(
   deps,
 ));
 const otherCookie = cookiePair(otherIssued.cookies[0]);
+assert.equal(otherIssued.body.canUpdateAny, undefined);
+assert.equal(otherIssued.body.email, "other@example.com");
+
+const mochoIssued = await read(await handleSessionRequest(
+  request("POST", "/api/session", { body: { credential: "mocho-google" } }),
+  env,
+  deps,
+));
+assert.equal(mochoIssued.status, 200);
+assert.equal(mochoIssued.body.email, "Mocholateio@gmail.com");
+assert.equal(mochoIssued.body.canUpdateAny, true);
+assert.equal(mochoIssued.body.sub, undefined);
 
 function layoutBody(title = "Manor study") {
   return {

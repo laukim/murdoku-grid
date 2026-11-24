@@ -1,4 +1,5 @@
 import { verifyGoogleIdToken } from "../js/google-jwt.js";
+import { canUpdateAnyLayout } from "./library-editors.js";
 import {
   clearSessionCookie,
   issueSession,
@@ -27,7 +28,7 @@ async function currentSession(request, env) {
   if (!token) return json({ signedIn: false });
   const identity = await verifySession(token, sessionSecret(env));
   if (!identity) return json({ signedIn: false }, 200, { "set-cookie": clearSessionCookie() });
-  return json({ signedIn: true, email: identity.email });
+  return json(signedInBody(identity.email));
 }
 
 async function createSession(request, env, deps) {
@@ -53,10 +54,16 @@ async function createSession(request, env, deps) {
     return json({ error: "Session signing is not configured" }, 500);
   }
   return json(
-    { signedIn: true, email: typeof identity.email === "string" ? identity.email : "" },
+    signedInBody(typeof identity.email === "string" ? identity.email : ""),
     200,
     { "set-cookie": sessionSetCookie(token) },
   );
+}
+
+function signedInBody(email) {
+  const body = { signedIn: true, email: email || "" };
+  if (canUpdateAnyLayout(body.email)) body.canUpdateAny = true;
+  return body;
 }
 
 function logout(request) {

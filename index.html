@@ -1366,6 +1366,7 @@
     /** @type {string|null} D1 id of the layout last loaded or saved */
     let loadedLayoutId = null;
     let loadedLayoutMine = false;
+    let canUpdateAny = false;
     /** @type {{ id: string, title: string, width: number, height: number, updated_at?: string }[]} */
     let savedLayouts = [];
     let libraryQuery = '';
@@ -2693,6 +2694,7 @@
 
     function paintSignedOut() {
       signedIn = false;
+      canUpdateAny = false;
       els.layoutsPanel.hidden = false;
       els.layoutWrites.hidden = true;
       els.signInBtn.hidden = false;
@@ -2710,8 +2712,9 @@
       syncLayoutEditing();
     }
 
-    function paintSignedIn(email) {
+    function paintSignedIn(email, session = {}) {
       signedIn = true;
+      canUpdateAny = session.canUpdateAny === true;
       els.layoutsPanel.hidden = false;
       els.layoutWrites.hidden = false;
       els.signInBtn.hidden = true;
@@ -2794,7 +2797,7 @@
         throw new Error('Google did not return a usable sign-in. The board is unchanged.');
       }
       clearStoredGoogleToken();
-      paintSignedIn(session.email || 'Signed in');
+      paintSignedIn(session.email || 'Signed in', session);
       const list = await refreshLayouts(true);
       const count = list.length;
       setLayoutStatus(`Signed in. ${count} saved puzzle${count === 1 ? '' : 's'}.`, 'ok');
@@ -2823,7 +2826,7 @@
       try {
         const session = await api('/api/session');
         if (session.signedIn) {
-          paintSignedIn(session.email || 'Signed in');
+          paintSignedIn(session.email || 'Signed in', session);
         } else {
           paintSignedOut();
           try {
@@ -3062,7 +3065,8 @@
     function syncUpdateButton() {
       const current = savedLayouts.find((layout) => layout.id === loadedLayoutId);
       loadedLayoutMine = !!current?.mine;
-      els.updateLayoutBtn.disabled = !loadedLayoutMine;
+      const canUpdateLoaded = !!current && (loadedLayoutMine || canUpdateAny);
+      els.updateLayoutBtn.disabled = !canUpdateLoaded;
       syncPuzzleNav();
     }
 
@@ -3126,7 +3130,7 @@
       if (!loadedLayoutId) throw new Error('Load a layout before updating it. Save current stores a new one.');
       const payload = currentLayoutPayload();
       if (!payload.title) throw new Error('Give the layout a title.');
-      if (!loadedLayoutMine) throw new Error('Only the owner can update this puzzle. Save current stores a new one.');
+      if (!loadedLayoutMine && !canUpdateAny) throw new Error('Only the owner can update this puzzle. Save current stores a new one.');
       const { layout } = await api(`/api/layouts/${loadedLayoutId}`, { method: 'PUT', body: payload, auth: true });
       loadedLayoutId = layout.id;
       await refreshLayouts(true);

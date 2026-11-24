@@ -3,21 +3,28 @@ import { readFileSync } from "node:fs";
 import { LocalD1 } from "./local-d1.js";
 import { SCHEMA_SQL } from "../worker/schema.js";
 import { handleLayoutsRequest } from "../worker/layouts-api.js";
+import { canUpdateAnyLayout, LIBRARY_EDITOR_EMAILS } from "../worker/library-editors.js";
 import { issueSession, SESSION_COOKIE } from "../worker/session.js";
 import worker from "../worker/index.js";
 
 const SECRET = "test-session-secret-do-not-use-in-prod!!";
 const KIM = "kim";
 const OTHER = "other";
+const MOCHO = "mocho";
+const KIM_CASE = "kim-case";
+const NEAR = "near";
 const cookieCache = new Map();
+const IDENTITIES = {
+  [KIM]: { sub: "kim-sub", email: "kim.lau817@gmail.com" },
+  [OTHER]: { sub: "other-sub", email: "other@example.com" },
+  [MOCHO]: { sub: "mocho-sub", email: "mocholateio@gmail.com" },
+  [KIM_CASE]: { sub: "kim-case-sub", email: "Kim.Lau817@gmail.com" },
+  [NEAR]: { sub: "near-sub", email: "kim.lau817+extra@gmail.com" },
+};
 
 async function cookieHeader(key) {
   if (key == null) return "";
-  const identity = key === KIM
-    ? { sub: "kim-sub", email: "kim.lau817@gmail.com" }
-    : key === OTHER
-      ? { sub: "other-sub", email: "other@example.com" }
-      : null;
+  const identity = IDENTITIES[key] || null;
   if (!identity) return `${SESSION_COOKIE}=${key}`;
   if (!cookieCache.has(key)) cookieCache.set(key, await issueSession(identity, SECRET));
   return `${SESSION_COOKIE}=${cookieCache.get(key)}`;
@@ -101,6 +108,20 @@ assert.match(html, /viewportBudget/);
 assert.match(html, /id="layoutTools" hidden/);
 assert.match(html, /body class="view-only"/);
 assert.match(html, /function canEditLayout/);
+assert.match(html, /let canUpdateAny = false/);
+assert.match(html, /canUpdateAny = session\.canUpdateAny === true/);
+assert.match(html, /loadedLayoutMine \|\| canUpdateAny/);
+assert.match(html, /!loadedLayoutMine && !canUpdateAny/);
+assert.deepEqual(LIBRARY_EDITOR_EMAILS, [
+  "mocholateio@gmail.com",
+  "kim.lau817@gmail.com",
+]);
+assert.equal(canUpdateAnyLayout("  MOCHOLATEIO@gmail.com "), true);
+assert.equal(canUpdateAnyLayout("kim.lau817@gmail.com"), true);
+assert.equal(canUpdateAnyLayout("other@example.com"), false);
+assert.equal(canUpdateAnyLayout("kim.lau817+extra@gmail.com"), false);
+assert.equal(canUpdateAnyLayout(""), false);
+assert.equal(canUpdateAnyLayout(null), false);
 assert.match(html, /id="setupPanel" hidden/);
 assert.match(html, /id="importPanel" hidden/);
 assert.match(html, /els.setupPanel.hidden = !editable/);
@@ -315,6 +336,98 @@ const deps = { now: clock(), id: ids() };
   assert.equal(stillThere.body.layout.title, "Kim only");
   const row = db.db.prepare("SELECT user_sub FROM layouts WHERE id = ?").get(owned.body.layout.id);
   assert.equal(row.user_sub, "kim-sub");
+}
+
+{
+  const created = await call(env, "POST", "/api/layouts", {
+    body: sample({ title: "Vol1 #67" }),
+    deps,
+  });
+  assert.equal(created.status, 201, created.body?.error);
+  const id = created.body.layout.id;
+  const mochoUpdate = await call(env, "PUT", `/api/layouts/${id}`, {
+    key: MOCHO,
+    body: sample({ title: "Vol1 #67", objects: [{ r: 0, c: 1, id: "tree" }] }),
+    deps,
+  });
+  assert.equal(mochoUpdate.status, 200, JSON.stringify(mochoUpdate.body));
+  assert.equal(mochoUpdate.body.layout.title, "Vol1 #67");
+  assert.deepEqual(mochoUpdate.body.layout.objects, [{ r: 0, c: 1, id: "tree" }]);
+  assert.equal(mochoUpdate.body.layout.mine, undefined);
+  assert.equal(mochoUpdate.body.layout.user_sub, undefined);
+  const owner = db.db.prepare("SELECT user_sub, title FROM layouts WHERE id = ?").get(id);
+  assert.equal(owner.user_sub, "kim-sub");
+  assert.equal(owner.title, "Vol1 #67");
+
+  const kimList = await call(env, "GET", "/api/layouts", { deps });
+  const kimItem = kimList.body.layouts.find((layout) => layout.id === id);
+  assert.equal(kimItem.mine, true);
+  assert.equal(kimItem.title, "Vol1 #67");
+  const mochoList = await call(env, "GET", "/api/layouts", { key: MOCHO, deps });
+  const mochoItem = mochoList.body.layouts.find((layout) => layout.id === id);
+  assert.equal(mochoItem.mine, undefined);
+
+  const mochoDelete = await call(env, "DELETE", `/api/layouts/${id}`, { key: MOCHO, deps });
+  assert.equal(mochoDelete.status, 404);
+  assert.equal(db.db.prepare("SELECT title FROM layouts WHERE id = ?").get(id).title, "Vol1 #67");
+
+  const cased = await call(env, "PUT", `/api/layouts/${id}`, {
+    key: KIM_CASE,
+    body: sample({ title: "Vol1 #67 revised" }),
+    deps,
+  });
+  assert.equal(cased.status, 200, JSON.stringify(cased.body));
+  assert.equal(cased.body.layout.mine, undefined);
+  assert.equal(db.db.prepare("SELECT user_sub, title FROM layouts WHERE id = ?").get(id).user_sub, "kim-sub");
+  assert.equal(db.db.prepare("SELECT title FROM layouts WHERE id = ?").get(id).title, "Vol1 #67 revised");
+
+  const near = await call(env, "PUT", `/api/layouts/${id}`, {
+    key: NEAR,
+    body: sample({ title: "Taken by alias" }),
+    deps,
+  });
+  assert.equal(near.status, 404);
+  assert.equal(db.db.prepare("SELECT title FROM layouts WHERE id = ?").get(id).title, "Vol1 #67 revised");
+
+  const spoof = await call(env, "PUT", `/api/layouts/${id}`, {
+    key: OTHER,
+    body: sample({ title: "Spoofed", email: "kim.lau817@gmail.com" }),
+    deps,
+  });
+  assert.equal(spoof.status, 404);
+  assert.equal(db.db.prepare("SELECT title FROM layouts WHERE id = ?").get(id).title, "Vol1 #67 revised");
+
+  const unsigned = await call(env, "PUT", `/api/layouts/${id}`, {
+    key: null,
+    body: sample({ title: "Unsigned" }),
+    deps,
+  });
+  assert.equal(unsigned.status, 401);
+  assert.equal(unsigned.body.error, "Sign in required");
+
+  const own = await call(env, "POST", "/api/layouts", {
+    key: MOCHO,
+    body: sample({ title: "Mocho original" }),
+    deps,
+  });
+  assert.equal(own.status, 201);
+  assert.equal(own.body.layout.mine, true);
+  const ownRow = db.db.prepare("SELECT user_sub FROM layouts WHERE id = ?").get(own.body.layout.id);
+  assert.equal(ownRow.user_sub, "mocho-sub");
+  const kimOnMocho = await call(env, "PUT", `/api/layouts/${own.body.layout.id}`, {
+    body: sample({ title: "Edited by Kim" }),
+    deps,
+  });
+  assert.equal(kimOnMocho.status, 200, JSON.stringify(kimOnMocho.body));
+  assert.equal(kimOnMocho.body.layout.mine, undefined);
+  assert.equal(kimOnMocho.body.layout.title, "Edited by Kim");
+  assert.equal(db.db.prepare("SELECT user_sub FROM layouts WHERE id = ?").get(own.body.layout.id).user_sub, "mocho-sub");
+  const kimDelete = await call(env, "DELETE", `/api/layouts/${own.body.layout.id}`, { deps });
+  assert.equal(kimDelete.status, 404);
+  const mochoDeleteOwn = await call(env, "DELETE", `/api/layouts/${own.body.layout.id}`, { key: MOCHO, deps });
+  assert.equal(mochoDeleteOwn.status, 200);
+  const ownerDelete = await call(env, "DELETE", `/api/layouts/${id}`, { deps });
+  assert.equal(ownerDelete.status, 200);
 }
 
 {
