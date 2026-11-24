@@ -111,8 +111,10 @@ export async function insertLayout(db, userSub, id, value, now) {
   return getLayoutById(db, userSub, id);
 }
 
-export async function updateLayout(db, userSub, id, value, now) {
-  const existing = await getLayoutById(db, userSub, id);
+export async function updateLayout(db, userSub, id, value, now, { anyOwner = false } = {}) {
+  const existing = anyOwner
+    ? await db.prepare("SELECT user_sub FROM layouts WHERE id = ?").bind(id).first()
+    : await db.prepare("SELECT user_sub FROM layouts WHERE id = ? AND user_sub = ?").bind(id, userSub).first();
   if (!existing) return null;
   await db.prepare(
     `UPDATE layouts
@@ -129,9 +131,9 @@ export async function updateLayout(db, userSub, id, value, now) {
     JSON.stringify(value.characters),
     now,
     id,
-    userSub,
+    existing.user_sub,
   ).run();
-  return getLayoutById(db, userSub, id);
+  return getPublicLayout(db, id, userSub);
 }
 
 export async function deleteLayoutById(db, userSub, id) {

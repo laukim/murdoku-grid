@@ -7,6 +7,7 @@ import {
   normalizeLayoutInput,
   updateLayout,
 } from "./layouts.js";
+import { canUpdateAnyLayout } from "./library-editors.js";
 import { clearSessionCookie, readSessionToken, sessionSecret, verifySession } from "./session.js";
 
 const MAX_BODY = 200_000;
@@ -35,7 +36,7 @@ export async function handleLayoutsRequest(request, env, deps = {}) {
       return json({ error: "Method not allowed" }, 405);
     }
     if (request.method === "GET") return readLayout(env, viewer.sub, id, extra);
-    if (request.method === "PUT") return replaceLayout(request, env, viewer.sub, id, deps);
+    if (request.method === "PUT") return replaceLayout(request, env, viewer, id, deps);
     if (request.method === "DELETE") return removeLayout(env, viewer.sub, id);
     return json({ error: "Method not allowed" }, 405);
   } catch (err) {
@@ -62,14 +63,15 @@ async function readLayout(env, userSub, id, extra) {
   return json({ layout }, 200, extra);
 }
 
-async function replaceLayout(request, env, userSub, id, deps) {
+async function replaceLayout(request, env, viewer, id, deps) {
   const body = await readJson(request);
   if (body === undefined) return json({ error: "Layout is too large" }, 413);
   if (body === null) return json({ error: "Invalid JSON" }, 400);
   const parsed = normalizeLayoutInput(body);
   if (!parsed.ok) return json({ error: parsed.error }, 400);
   const now = (deps.now || (() => new Date().toISOString()))();
-  const layout = await updateLayout(env.DB, userSub, id, parsed.value, now);
+  const anyOwner = !!viewer.sub && canUpdateAnyLayout(viewer.email);
+  const layout = await updateLayout(env.DB, viewer.sub, id, parsed.value, now, { anyOwner });
   if (!layout) return json({ error: "Not found" }, 404);
   return json({ layout });
 }
@@ -82,10 +84,10 @@ async function removeLayout(env, userSub, id) {
 
 async function readViewer(request, env) {
   const token = readSessionToken(request);
-  if (!token) return { sub: "", invalid: false };
+  if (!token) return { sub: "", email: "", invalid: false };
   const identity = await verifySession(token, sessionSecret(env));
-  if (!identity?.sub) return { sub: "", invalid: true };
-  return { sub: identity.sub, invalid: false };
+  if (!identity?.sub) return { sub: "", email: "", invalid: true };
+  return { sub: identity.sub, email: identity.email || "", invalid: false };
 }
 
 function clearHeader(viewer) {
