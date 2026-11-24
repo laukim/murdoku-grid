@@ -16,6 +16,7 @@ export const KNOWN_OBJECT_IDS = [
   "carpet",
   "car",
   "oil-slick",
+  "horse",
   "table",
   "bookshelf",
   "cash-register",
@@ -25,6 +26,8 @@ export const KNOWN_OBJECT_IDS = [
   "statue",
   "boulder",
   "rubble",
+  "crate",
+  "bush",
   "other",
 ];
 

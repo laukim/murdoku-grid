@@ -24,14 +24,43 @@ const page = readFileSync(new URL("../index.html", import.meta.url), "utf8");
 const catalog = page.slice(page.indexOf("const FURNITURE_ITEMS"), page.indexOf("const MAP_ITEMS"));
 const pickerIds = [...catalog.matchAll(/id: '([^']+)'/g)].map((match) => match[1]);
 assert.deepEqual(pickerIds, KNOWN_OBJECT_IDS);
+const furnitureBlock = page.slice(page.indexOf("const FURNITURE_ITEMS"), page.indexOf("const OBSTACLE_ITEMS"));
 const obstacleBlock = page.slice(page.indexOf("const OBSTACLE_ITEMS"), page.indexOf("const MAP_ITEMS"));
-for (const id of ["boulder", "rubble"]) {
-  const start = obstacleBlock.indexOf(`id: '${id}'`);
-  assert.ok(start >= 0, `${id} is an obstacle`);
-  const next = obstacleBlock.indexOf("\n      {", start + 1);
-  const entry = obstacleBlock.slice(start, next === -1 ? obstacleBlock.length : next);
+
+function catalogEntry(block, id) {
+  const start = block.indexOf(`id: '${id}'`);
+  assert.ok(start >= 0, `${id} is in the catalog`);
+  const next = block.indexOf("\n      {", start + 1);
+  return block.slice(start, next === -1 ? block.length : next);
+}
+
+for (const id of ["boulder", "rubble", "crate", "bush"]) {
+  const entry = catalogEntry(obstacleBlock, id);
   assert.equal(entry.includes("stretchable"), false, `${id} stays a single cell`);
+  assert.equal(entry.includes("blocksPlacement: false"), false, `${id} blocks placement`);
   assert.match(entry, /category: 'obstacle'/);
+}
+
+const horse = catalogEntry(furnitureBlock, "horse");
+assert.equal(horse.includes("stretchable"), false, "horse stays a single cell");
+assert.match(horse, /blocksPlacement: false/);
+assert.match(horse, /category: 'furniture'/);
+assert.match(horse, /shortcut: 'Y'/);
+assert.match(catalogEntry(obstacleBlock, "crate"), /shortcut: 'N'/);
+assert.match(catalogEntry(obstacleBlock, "bush"), /shortcut: 'F'/);
+
+const car = catalogEntry(furnitureBlock, "car");
+assert.match(car, /stretchable: true/);
+assert.match(car, /blocksPlacement: false/);
+assert.match(car, /shortcut: 'A'/);
+assert.match(page, /const horizontalOnly = id === 'car'/);
+assert.match(page, /if \(itemId === 'car'\) return carSvg\(neighbors\)/);
+assert.doesNotMatch(page.slice(page.indexOf("function stretchSvgForCell"), page.indexOf("function appendMapItemIcon")), /horse|crate|bush/);
+
+const shortcuts = [...catalog.matchAll(/shortcut: '([^']+)'/g)].map((match) => match[1]);
+assert.equal(new Set(shortcuts).size, shortcuts.length, "map letters are unique");
+for (const reserved of ["E", "X"]) {
+  assert.equal(shortcuts.includes(reserved), false, `${reserved} stays a mode key`);
 }
 
 const garden = JSON.parse(readFileSync(new URL("../examples/garden-path.json", import.meta.url), "utf8"));
@@ -154,6 +183,31 @@ expectReject({ width: 3, height: 2, walls: [{ from: [0, 0], to: [1, 1] }] }, /ad
 expectReject({ width: 3, height: 2, objects: [{ r: 0, c: 0, id: "Not an id!!" }] }, /Invalid object id/);
 expectReject({ rooms: ["AB", "AB"], width: 3 }, /width is 3/);
 expectReject({}, /Width must be an integer/);
+
+{
+  const layout = expectImport({
+    title: "Yard",
+    width: 3,
+    height: 2,
+    objects: [
+      { r: 0, c: 1, type: "Crate" },
+      { r: 1, c: 2, kind: "bush" },
+    ],
+    obstacleMap: [
+      ["Horse", ".", "Bush"],
+      ["-", "", "crate"],
+    ],
+  });
+  assert.deepEqual(layout.objects, [
+    { r: 0, c: 0, id: "horse" },
+    { r: 0, c: 1, id: "crate" },
+    { r: 0, c: 2, id: "bush" },
+    { r: 1, c: 2, id: "bush" },
+  ]);
+  assert.match(layoutInsertSql(layout), /"id":"horse"/);
+  assert.match(layoutInsertSql(layout), /"id":"crate"/);
+  assert.match(layoutInsertSql(layout), /"id":"bush"/);
+}
 
 {
   const layout = expectImport({

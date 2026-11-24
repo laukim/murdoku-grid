@@ -1172,6 +1172,8 @@
 
     // Map-mode letters. E stays Erase and X stays Mark X, so Tree is W
     // (woods — T, R, and E are taken) and Other is M (miscellaneous).
+    // Horse is Y (pony — H is Chair). Crate is N (carton — C, R, A, T, and
+    // E are taken). Bush is F (foliage — B, U, S, and H are taken).
     const FURNITURE_ITEMS = [
       {
         id: 'chair',
@@ -1216,6 +1218,15 @@
         blocksPlacement: false,
         stretchable: true,
         svg: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/><path d="M5 11q3.5-2 7 0t7 0"/><path d="M6 14q3 2 6 0t6 0"/></svg>',
+      },
+      {
+        id: 'horse',
+        label: 'Horse',
+        shortcut: 'Y',
+        category: 'furniture',
+        blocksPlacement: false,
+        gridScale: 0.72,
+        svg: '<svg viewBox="0 0 24 24"><path d="M3.8 13c1.2.6 2 .1 2.3-1"/><rect x="5.4" y="10" width="11" height="6.6" rx="3.3"/><circle cx="17.5" cy="9.3" r="2.5"/><path d="M16.3 7.2 16.6 5.6"/><path d="M18.4 7 19 5.4"/><path d="M8.2 16.4v2.3"/><path d="M11.2 16.6v2.3"/><path d="M14.1 16.4v2.3"/></svg>',
       },
     ];
 
@@ -1283,6 +1294,20 @@
         shortcut: 'R',
         category: 'obstacle',
         svg: '<svg viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M6.8 6.6 8.8 5.5 17.9 17.4 15.9 18.5Z"/><path fill="currentColor" stroke="none" d="M6.1 17.2 8 18.6 17.7 7.2 15.8 5.8Z"/><path fill="currentColor" stroke="none" d="M5.2 12.4 16.6 14.8 16.1 16.9 4.7 14.5Z"/></svg>',
+      },
+      {
+        id: 'crate',
+        label: 'Crate',
+        shortcut: 'N',
+        category: 'obstacle',
+        svg: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 4 20 20"/><path d="M20 4 4 20"/></svg>',
+      },
+      {
+        id: 'bush',
+        label: 'Bush',
+        shortcut: 'F',
+        category: 'obstacle',
+        svg: '<svg viewBox="0 0 24 24"><circle cx="8" cy="14.2" r="3.3"/><circle cx="16" cy="14.2" r="3.3"/><circle cx="12" cy="9.6" r="3.7"/></svg>',
       },
       {
         id: 'other',
