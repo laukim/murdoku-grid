@@ -6,7 +6,7 @@ The app is a Cloudflare Worker. Static files are Workers assets, and saved layou
 
 **Live app:** https://murdoku-grid.mocholate.workers.dev
 
-GitHub Pages (`https://laukim.github.io/murdoku-grid/`) stops once the GitHub repo is private. That is expected; Cloudflare is the host. The D1 database is `murdoku-layouts`. A source change still needs a deploy; the Worker currently running was published with embedded assets, so publish this repo with `npm run deploy` when Wrangler is logged in.
+GitHub Pages (`https://laukim.github.io/murdoku-grid/`) stops once the GitHub repo is private. That is expected; Cloudflare is the host. The D1 database is `murdoku-layouts`. Workers Builds deploys automatically on a push or merge to `main`. `npm run deploy` remains a manual fallback from a machine logged in with Wrangler.
 
 ## What it does
 
@@ -192,6 +192,12 @@ npm run dev
 
 ## Deploy
 
+Workers Builds deploys this Worker automatically on a push or merge to `main`. The existing `murdoku-grid` Worker is connected to this GitHub repository. The production branch is `main`. No build command is set, and the root directory is the repository root. The deploy command is `npx wrangler deploy`, the same command as `npm run deploy`. The Wrangler `name` stays `murdoku-grid`.
+
+Connecting the repository leaves the commits already on `main` unpublished. A new commit on `main` triggers the first production build. Later pushes and merges to `main` deploy the same way. [Workers Builds](https://developers.cloudflare.com/workers/ci-cd/builds/) documents this connection.
+
+A push to a branch other than `main` runs `npx wrangler preview`. `wrangler.jsonc` includes an empty `previews` block so that command can run. The block does not copy the production D1 binding.
+
 The D1 database already exists in the Cloudflare account:
 
 - name: `murdoku-layouts`
@@ -199,7 +205,7 @@ The D1 database already exists in the Cloudflare account:
 
 That id is in `wrangler.jsonc`. `layouts` is already created there, so the migration’s `CREATE TABLE IF NOT EXISTS` is safe and records Wrangler’s migration history.
 
-From a machine logged in with `npx wrangler login` (or `CLOUDFLARE_API_TOKEN`):
+`npm run deploy` remains a manual fallback from a machine logged in with `npx wrangler login` (or `CLOUDFLARE_API_TOKEN`):
 
 ```bash
 openssl rand -base64 32 | npx wrangler secret put SESSION_SECRET

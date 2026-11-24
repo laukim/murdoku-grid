@@ -11,6 +11,10 @@
   // SESSION_SECRET signs the 30-day session cookie. It is a Worker secret,
   // not a var: npx wrangler secret put SESSION_SECRET
   // Do not put the secret in this file.
+  // Branches other than main run `npx wrangler preview`. That command
+  // requires this block. It stays empty, so the preview does not receive
+  // the production D1 binding.
+  "previews": {},
   "d1_databases": [
     {
       "binding": "DB",
