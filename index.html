@@ -855,10 +855,10 @@
     .cell.car-cell:hover { background: #e8edf4; }
 
     .cell.oil-slick-cell {
-      background: #3d3d45;
+      background: #e6e4de;
     }
 
-    .cell.oil-slick-cell:hover { background: #45454e; }
+    .cell.oil-slick-cell:hover { background: #dedcd6; }
 
     .cell .map-feature-underlay {
       position: absolute;
@@ -1217,7 +1217,7 @@
         category: 'furniture',
         blocksPlacement: false,
         stretchable: true,
-        svg: '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="8" ry="6"/><path d="M5 11q3.5-2 7 0t7 0"/><path d="M6 14q3 2 6 0t6 0"/></svg>',
+        svg: '<svg viewBox="0 0 24 24"><path d="M4.6 12.6C3.8 11 4.8 9.4 6.6 9.1 8 8.8 9.2 9.6 10.6 9.2 12.2 8.7 13.6 8.4 15.2 8.8 16.6 9.1 17.6 9.8 19 10 20.4 10.2 21.2 11.4 20.8 12.7 20.4 14 19 14.4 17.6 14.8 16.2 14.6 14.8 15.2 13.4 15.8 11.8 16.2 10.4 15.6 9 15 7.8 14.8 6.4 15.2 5.4 14.6 4.8 14 4.6 12.6Z"/><path d="M7.6 11.6C10.2 10.8 12.8 10.8 15.2 11.4 16.6 11.8 18 11.6 19.4 11.1"/><ellipse cx="12.4" cy="19.2" rx="1.7" ry=".75"/></svg>',
       },
       {
         id: 'horse',
@@ -1226,7 +1226,7 @@
         category: 'furniture',
         blocksPlacement: false,
         gridScale: 0.72,
-        svg: '<svg viewBox="0 0 24 24"><path d="M3.8 13c1.2.6 2 .1 2.3-1"/><rect x="5.4" y="10" width="11" height="6.6" rx="3.3"/><circle cx="17.5" cy="9.3" r="2.5"/><path d="M16.3 7.2 16.6 5.6"/><path d="M18.4 7 19 5.4"/><path d="M8.2 16.4v2.3"/><path d="M11.2 16.6v2.3"/><path d="M14.1 16.4v2.3"/></svg>',
+        svg: '<svg viewBox="0 0 24 24"><path d="M6.9 7.5 6.45 4.7 8.35 7.15"/><path d="M3.45 8.85C3.7 7.85 4.7 7.2 5.7 7.2C6.45 7.15 7.15 7.45 7.4 7.9C8.6 8.7 9.55 9.65 10.4 10.5C12.9 10.15 15.55 10.15 17.65 10.75C18.75 11.2 18.95 12.35 18.5 13.35"/><path d="M3.45 8.85C3.2 9.45 3.3 10.25 4.05 10.55C4.95 10.95 5.85 10.55 6.55 10.2C7.25 10.7 8.2 12.7 9.2 14.45C11.4 14.95 13.85 15 16.15 14.65C17.15 14.6 18.05 14.15 18.5 13.35"/><path d="M18.5 11.8C19.85 12.5 20.55 14.9 19.65 17.65"/><path d="M9.3 14.45 8.95 20.2"/><path d="M11.25 14.5 11.8 20.2"/><path d="M15.45 14.6 15 20.2"/><path d="M17.05 14.5 17.7 20.2"/></svg>',
       },
     ];
 
@@ -1307,7 +1307,7 @@
         label: 'Bush',
         shortcut: 'F',
         category: 'obstacle',
-        svg: '<svg viewBox="0 0 24 24"><circle cx="8" cy="14.2" r="3.3"/><circle cx="16" cy="14.2" r="3.3"/><circle cx="12" cy="9.6" r="3.7"/></svg>',
+        svg: '<svg viewBox="0 0 24 24"><path d="M6.2 16.8C5.2 16.4 4.3 15.6 4.5 14.5C3.4 13.9 3.3 12.4 4.3 11.6C3.8 10.3 4.6 8.9 6 8.6C6.3 7.2 7.6 6.2 9 6.3C9.6 5.1 11.1 4.6 12.3 5.2C13.4 4.4 15 4.7 15.7 5.8C17 5.6 18.4 6.6 18.6 8C19.8 8.4 20.6 9.7 20.3 11C21.2 11.8 21.1 13.3 20 14.1C20.2 15.3 19.2 16.5 17.8 16.8C15.6 17.5 8.4 17.5 6.2 16.8Z"/><path d="M7 18.8C10.2 19.7 13.8 19.7 17 18.8"/></svg>',
       },
       {
         id: 'other',
@@ -1625,21 +1625,91 @@
     }
 
     function oilSlickSvg(n) {
-      const x0 = n.left ? 0 : 3;
-      const y0 = n.up ? 0 : 3;
-      const x1 = n.right ? 24 : 21;
-      const y1 = n.down ? 24 : 21;
-      const w = x1 - x0;
-      const h = y1 - y0;
-      const connected = n.left || n.right || n.up || n.down;
-      const midY = (y0 + y1) / 2;
+      // An unconnected cell is the picker icon: irregular outline, inner
+      // sheen, and one drip. Fill stays none (the cell colour is the stain).
+      if (!n.left && !n.right && !n.up && !n.down) return getMapItem('oil-slick').svg;
 
-      const parts = [
-        `<rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="${connected ? 0 : 3}" fill="currentColor" fill-opacity="0.4" stroke="currentColor" stroke-width="1.3"/>`,
-        `<path d="M${x0 + 2} ${midY - 1.5} Q${x0 + w / 2} ${midY - 3.5} ${x1 - 2} ${midY - 1.5}" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.65"/>`,
-        `<path d="M${x0 + 2} ${midY + 1.5} Q${x0 + w / 2} ${midY + 3.5} ${x1 - 2} ${midY + 1.5}" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.65"/>`,
-      ];
+      // Joined cells keep that puddle and run each open shore out to the
+      // shared edge. Seam coordinates match on every cell, so neighbouring
+      // strokes meet and the group reads as one stain. A joined side draws
+      // no cap.
+      const topY = 9.2;
+      const botY = 14.8;
+      const leftX = 5;
+      const rightX = 19.2;
+      const paths = [];
+
+      if (!n.up) {
+        const x0 = n.left ? 0 : 6.6;
+        const y0 = n.left ? topY : 9.1;
+        const x1 = n.right ? 24 : 19;
+        const y1 = n.right ? topY : 10;
+        let d = `M${x0} ${y0}`;
+        if (n.left) d += 'C2.2 9.15 4.4 9.1 6.6 9.1';
+        d += 'C8 8.8 9.2 9.6 10.6 9.2';
+        d += 'C12.2 8.7 13.6 8.4 15.2 8.8';
+        d += n.right ? `C16.6 9.1 17.6 9.5 ${x1} ${y1}` : 'C16.6 9.1 17.6 9.8 19 10';
+        paths.push(d);
+      }
+
+      if (!n.right) {
+        const x0 = n.up ? rightX : 19;
+        const y0 = n.up ? 0 : 10;
+        const x1 = n.down ? rightX : 17.6;
+        const y1 = n.down ? 24 : 14.8;
+        let d = `M${x0} ${y0}`;
+        if (n.up) d += `C${rightX} 3.4 19.1 6.6 19 10`;
+        d += 'C20.4 10.2 21.2 11.4 20.8 12.7';
+        d += n.down ? `C20.4 14 19.4 16.2 ${x1} ${y1}` : 'C20.4 14 19 14.4 17.6 14.8';
+        paths.push(d);
+      }
+
+      if (!n.down) {
+        const x0 = n.right ? 24 : 17.6;
+        const y0 = n.right ? botY : 14.8;
+        const x1 = n.left ? 0 : 5.4;
+        const y1 = n.left ? botY : 14.6;
+        let d = `M${x0} ${y0}`;
+        if (n.right) d += 'C21.6 14.9 19.6 14.85 17.6 14.8';
+        d += 'C16.2 14.6 14.8 15.2 13.4 15.8';
+        d += 'C11.8 16.2 10.4 15.6 9 15';
+        d += n.left ? `C7.2 14.9 3.6 ${botY} ${x1} ${y1}` : 'C7.8 14.8 6.4 15.2 5.4 14.6';
+        paths.push(d);
+      }
+
+      if (!n.left) {
+        const x0 = n.down ? leftX : 5.4;
+        const y0 = n.down ? 24 : 14.6;
+        const x1 = n.up ? leftX : 6.6;
+        const y1 = n.up ? 0 : 9.1;
+        let d = `M${x0} ${y0}`;
+        if (n.down) d += `C${leftX} 20.4 5.3 17.4 5.4 14.6`;
+        d += 'C4.8 14 4.6 12.6 4.6 12.6';
+        d += n.up ? `C4.2 10.2 4.6 5.2 ${x1} ${y1}` : 'C3.8 11 4.8 9.4 6.6 9.1';
+        paths.push(d);
+      }
+
+      const parts = paths.map(d => `<path d="${d}" fill="none"/>`);
+      parts.push(oilSlickHighlight(n));
+      // One drip under a puddle that is not opening sideways. A horizontal
+      // run stays a single shore; a vertical stack keeps the drop at its foot.
+      if (!n.down && !n.left && !n.right) {
+        parts.push('<ellipse cx="12.4" cy="19.2" rx="1.7" ry=".75" fill="none"/>');
+      }
       return `<svg viewBox="0 0 24 24">${parts.join('')}</svg>`;
+    }
+
+    function oilSlickHighlight(n) {
+      if (!n.left && !n.right) {
+        return '<path d="M7.6 11.6C10.2 10.8 12.8 10.8 15.2 11.4 16.6 11.8 18 11.6 19.4 11.1" fill="none"/>';
+      }
+      const x0 = n.left ? 0 : 7.6;
+      const y0 = n.left ? 11.4 : 11.6;
+      let d = `M${x0} ${y0}`;
+      if (n.left) d += 'C2.5 11.3 5 11.4 7.6 11.6';
+      d += 'C10.2 10.8 12.8 10.8 15.2 11.4C16.6 11.8 18 11.6 19.4 11.1';
+      if (n.right) d += 'C21.2 11.2 22.8 11.3 24 11.4';
+      return `<path d="${d}" fill="none"/>`;
     }
 
     function stretchSvgForCell(itemId, neighbors) {
