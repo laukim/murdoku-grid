@@ -34,7 +34,7 @@ function catalogEntry(block, id) {
   return block.slice(start, next === -1 ? block.length : next);
 }
 
-for (const id of ["boulder", "rubble", "crate", "bush"]) {
+for (const id of ["boulder", "rubble", "crate", "bush", "cow", "boar"]) {
   const entry = catalogEntry(obstacleBlock, id);
   assert.equal(entry.includes("stretchable"), false, `${id} stays a single cell`);
   assert.equal(entry.includes("blocksPlacement: false"), false, `${id} blocks placement`);
@@ -48,6 +48,8 @@ assert.match(horse, /category: 'furniture'/);
 assert.match(horse, /shortcut: 'Y'/);
 assert.match(catalogEntry(obstacleBlock, "crate"), /shortcut: 'N'/);
 assert.match(catalogEntry(obstacleBlock, "bush"), /shortcut: 'F'/);
+assert.match(catalogEntry(obstacleBlock, "cow"), /shortcut: 'K'/);
+assert.match(catalogEntry(obstacleBlock, "boar"), /shortcut: 'J'/);
 
 const car = catalogEntry(furnitureBlock, "car");
 assert.match(car, /stretchable: true/);
@@ -55,7 +57,7 @@ assert.match(car, /blocksPlacement: false/);
 assert.match(car, /shortcut: 'A'/);
 assert.match(page, /const horizontalOnly = id === 'car'/);
 assert.match(page, /if \(itemId === 'car'\) return carSvg\(neighbors\)/);
-assert.doesNotMatch(page.slice(page.indexOf("function stretchSvgForCell"), page.indexOf("function appendMapItemIcon")), /horse|crate|bush/);
+assert.doesNotMatch(page.slice(page.indexOf("function stretchSvgForCell"), page.indexOf("function appendMapItemIcon")), /horse|crate|bush|cow|boar/);
 
 const shortcuts = [...catalog.matchAll(/shortcut: '([^']+)'/g)].map((match) => match[1]);
 assert.equal(new Set(shortcuts).size, shortcuts.length, "map letters are unique");
