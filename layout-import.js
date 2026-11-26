@@ -28,6 +28,8 @@ export const KNOWN_OBJECT_IDS = [
   "rubble",
   "crate",
   "bush",
+  "cow",
+  "boar",
   "other",
 ];
 

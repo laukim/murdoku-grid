@@ -15,13 +15,13 @@ Set the grid size, then mark the puzzle as you work:
 - **Pencil marks** — click or drag to note which characters could go in a cell
 - **Place a person** — long-press a cell to confirm someone’s position; row and column cross-outs apply automatically
 - **Mark X** — block a whole cell when no one can go there
-- **Obstacles and furniture** — tables, shelves, cash registers, trees, boulders, rubble, crates, bushes, chairs, horses, and the other map objects. A horse is furniture: people can be placed on it, and it stays one cell. A crate or bush blocks the cell. Sign in to place or change them. Unsigned viewers get a legend of those icons instead of the tool buttons.
+- **Obstacles and furniture** — tables, shelves, cash registers, trees, boulders, rubble, crates, bushes, cows, boars, chairs, horses, and the other map objects. A horse is furniture: people can be placed on it, and it stays one cell. A crate, bush, cow, or boar blocks the cell. Sign in to place or change them. Unsigned viewers get a legend of those icons instead of the tool buttons.
 - **Room walls and windows** — click an internal edge to cycle wall, window, and open. Drag draws or clears solid walls. A window is a wall with a gap in the middle. Sign in to edit them.
 - **Character colors** — A–Z (and V for the victim) each have their own color
 - **Create grid / Open a board** — set a size, paste a playground board, or import JSON. Sign in to use these
 - **Saved puzzles** — the list of every saved layout is visible without an account. Titles such as Vol1 #5 come before Vol1 #11. Unsigned visitors see titles only, in a searchable list with volume filters. Previous and next, including the left and right arrow keys, move through that order and stop at the ends. Sign in to create a grid, open a board, edit walls, windows, furniture, and obstacles, or to save, update, or delete your own.
 
-Keyboard shortcuts: letter keys select a character until you sign in. Signed in, the letter on each furniture or obstacle selects that tool. Horse is `Y`, crate is `N`, and bush is `F`. `X` marks a cell and `E` erases.
+Keyboard shortcuts: letter keys select a character until you sign in. Signed in, the letter on each furniture or obstacle selects that tool. Horse is `Y`, crate is `N`, bush is `F`, cow is `K`, and boar is `J`. `X` marks a cell and `E` erases.
 
 Clear all removes pencil marks, placements, and X cells. Room walls and objects stay, so a loaded layout can be marked again.
 
@@ -110,7 +110,7 @@ A file can describe rooms in any of these ways:
 - `walls`, `wallSegments`, or `edges`: internal borders, with or without a room map. Extra walls are added on top of a map. Each entry can be `"h,r,c"` / `"v,r,c"`, `{ "dir": "h", "r": 0, "c": 1 }`, `{ "from": [0, 0], "to": [0, 1] }`, or `[[0, 0], [1, 0]]`. `h,r,c` is the line under row `r` at column `c`. `v,r,c` is the line to the right of column `c` in row `r`.
 - `width` and `height` (columns and rows, 2–20). Optional when a room map sets the size. A wall-only file needs both.
 
-Optional objects use `obstacles`, `objects`, `features`, or a grid in `obstacleMap` / `objectMap`. A cell is `{ "r": 0, "c": 2, "id": "tree" }` (`row`/`col`/`x`/`y` and `type` work too). In a grid, `""`, `"-"`, and `"."` are empty. Ids drawn by the picker: `chair`, `bed`, `carpet`, `car`, `oil-slick`, `horse`, `table`, `bookshelf`, `cash-register`, `plant`, `tree`, `tv`, `statue`, `boulder`, `rubble`, `crate`, `bush`, `other`. Any other lowercase slug is kept so a later pass can still edit that cell; the grid shows it with the generic obstacle icon. `windows` uses the same `h,r,c` / `v,r,c` keys as walls.
+Optional objects use `obstacles`, `objects`, `features`, or a grid in `obstacleMap` / `objectMap`. A cell is `{ "r": 0, "c": 2, "id": "tree" }` (`row`/`col`/`x`/`y` and `type` work too). In a grid, `""`, `"-"`, and `"."` are empty. Ids drawn by the picker: `chair`, `bed`, `carpet`, `car`, `oil-slick`, `horse`, `table`, `bookshelf`, `cash-register`, `plant`, `tree`, `tv`, `statue`, `boulder`, `rubble`, `crate`, `bush`, `cow`, `boar`, `other`. Any other lowercase slug is kept so a later pass can still edit that cell; the grid shows it with the generic obstacle icon. `windows` uses the same `h,r,c` / `v,r,c` keys as walls.
 
 `characters` defaults to `A` … `V` using `min(width, height)` labels, same as Create grid. `marks` uses the saved-layout shape. A character label such as `"A"` is accepted anywhere an index is accepted and stored as an index.
 
