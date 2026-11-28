@@ -8,6 +8,7 @@ import {
   updateLayout,
 } from "./layouts.js";
 import { canUpdateAnyLayout } from "./library-editors.js";
+import { clearSolveProgress, ensureProgressSchema, readSolveProgress, saveSolveProgress } from "./progress.js";
 import { clearSessionCookie, readSessionToken, sessionSecret, verifySession } from "./session.js";
 
 const MAX_BODY = 200_000;
@@ -15,21 +16,27 @@ const ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function handleLayoutsRequest(request, env, deps = {}) {
   const parts = new URL(request.url).pathname.split("/").filter(Boolean);
-  if (parts[0] !== "api" || parts[1] !== "layouts" || parts.length > 3) {
+  if (parts[0] !== "api" || parts[1] !== "layouts" || parts.length > 4) {
     return json({ error: "Not found" }, 404);
   }
   const id = parts[2] || null;
   if (id && !ID_RE.test(id)) return json({ error: "Not found" }, 404);
+  if (parts.length === 4 && parts[3] !== "progress") return json({ error: "Not found" }, 404);
+  const progress = parts[3] === "progress";
 
   const write = request.method === "POST" || request.method === "PUT" || request.method === "DELETE";
   const viewer = await readViewer(request, env);
-  if (write && !viewer.sub) {
+  // Progress is personal. A missing session is 401 on read and write.
+  // Public layout reads stay open and only clear a bad cookie.
+  if ((progress || write) && !viewer.sub) {
     return json({ error: "Sign in required" }, 401, clearHeader(viewer));
   }
 
   try {
     await ensureSchema(env.DB);
+    await ensureProgressSchema(env.DB);
     const extra = clearHeader(viewer);
+    if (progress) return handleProgressRequest(request, env, viewer.sub, id, deps, extra);
     if (!id) {
       if (request.method === "GET") return json({ layouts: await listLayouts(env.DB, viewer.sub) }, 200, extra);
       if (request.method === "POST") return createLayout(request, env, viewer.sub, deps);
@@ -43,6 +50,29 @@ export async function handleLayoutsRequest(request, env, deps = {}) {
     console.error("layouts request failed", err instanceof Error ? err.message : "");
     return json({ error: "Could not access layouts" }, 500);
   }
+}
+
+async function handleProgressRequest(request, env, userSub, id, deps, extra) {
+  if (request.method === "GET") {
+    const result = await readSolveProgress(env.DB, userSub, id);
+    if (result.missing) return json({ error: "Not found" }, 404, extra);
+    return json({ progress: result.progress }, 200, extra);
+  }
+  if (request.method === "PUT") {
+    const body = await readJson(request);
+    if (body === undefined) return json({ error: "Layout is too large" }, 413);
+    if (body === null) return json({ error: "Invalid JSON" }, 400);
+    const now = (deps.now || (() => new Date().toISOString()))();
+    const saved = await saveSolveProgress(env.DB, userSub, id, body, now);
+    if (!saved.ok) return json({ error: saved.error }, saved.status);
+    return json({ progress: saved.progress });
+  }
+  if (request.method === "DELETE") {
+    const cleared = await clearSolveProgress(env.DB, userSub, id);
+    if (!cleared) return json({ error: "Not found" }, 404);
+    return json({ ok: true });
+  }
+  return json({ error: "Method not allowed" }, 405);
 }
 
 async function createLayout(request, env, userSub, deps) {

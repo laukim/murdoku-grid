@@ -179,14 +179,23 @@
       color: #555;
     }
 
-    #layoutWrites {
+    #layoutWrites,
+    #progressWrites {
       display: flex;
       flex-wrap: wrap;
       gap: 0.75rem;
       align-items: center;
     }
 
+    .progress-note {
+      flex: 1 1 16rem;
+      margin: 0;
+      font-size: 0.85rem;
+      color: #555;
+    }
+
     #layoutWrites[hidden],
+    #progressWrites[hidden],
     #layoutTools[hidden],
     #mapLegend[hidden],
     #setupPanel[hidden],
@@ -1129,7 +1138,7 @@
 
   <section class="layouts" id="layoutsPanel">
     <h2>Saved puzzles</h2>
-    <p class="sidebar-note">Open any saved puzzle to view the board. Sign in with Google to create a grid, open a board, edit the layout, or save and delete your own.</p>
+    <p class="sidebar-note">Open any saved puzzle to view the board. Library editors can create a grid, open a board, edit the layout, and update a saved puzzle. Delete stays with the account that owns the row.</p>
     <div class="layouts-row">
       <div class="field">
         <label for="layoutTitle">Title</label>
@@ -1144,6 +1153,10 @@
           <input id="includeMarks" type="checkbox" checked>
           Save pencil marks and placements
         </label>
+      </div>
+      <div id="progressWrites" hidden>
+        <button type="button" id="saveProgressBtn">Save progress</button>
+        <p class="progress-note">Saves your pencil marks, placements, and X cells for this puzzle on your account. Edits save automatically. The shared puzzle layout stays unchanged.</p>
       </div>
       <button type="button" id="refreshLayoutsBtn">Refresh</button>
     </div>
@@ -1161,6 +1174,7 @@
     /** @typedef {'pencil'|'map'|'x'|'erase'} ToolMode */
 
     const LONG_PRESS_MS = 450;
+    const PROGRESS_SAVE_MS = 800;
     const MOVE_THRESHOLD = 8;
     const CHAR_COLORS = [
       '#e11d48', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2',
@@ -1406,6 +1420,12 @@
     let loadedLayoutId = null;
     let loadedLayoutMine = false;
     let canUpdateAny = false;
+    // Guest progress autosave. Armed only after this puzzle's progress has loaded.
+    let progressToken = 0;
+    /** @type {string|null} */
+    let progressArmedFor = null;
+    let progressDirty = false;
+    let progressTimer = 0;
     /** @type {{ id: string, title: string, width: number, height: number, updated_at?: string }[]} */
     let savedLayouts = [];
     let libraryQuery = '';
@@ -1445,6 +1465,8 @@
       signOutBtn: document.getElementById('signOutBtn'),
       layoutsPanel: document.getElementById('layoutsPanel'),
       layoutWrites: document.getElementById('layoutWrites'),
+      progressWrites: document.getElementById('progressWrites'),
+      saveProgressBtn: document.getElementById('saveProgressBtn'),
       layoutTitle: document.getElementById('layoutTitle'),
       includeMarks: document.getElementById('includeMarks'),
       layoutList: document.getElementById('layoutList'),
@@ -1503,6 +1525,7 @@
       renderGrid();
       renderRoomEdges();
       renderCharList();
+      noteSolveEdit();
     }
 
     function charColor(i) {
@@ -2598,6 +2621,7 @@
       if (changed) {
         refreshAfterInteraction(startR, startC, refreshAction, wasDragging);
         renderCharList();
+        if (mode !== 'map') noteSolveEdit();
       }
       layoutLock = false;
     }
@@ -2618,6 +2642,7 @@
       pushHistory();
       if (applyCellAction(hit.r, hit.c, 'x-toggle')) {
         refreshCell(hit.r, hit.c);
+        noteSolveEdit();
       } else {
         history.pop();
       }
@@ -2775,7 +2800,11 @@
     }
 
     function canEditLayout() {
-      return signedIn;
+      return signedIn && canUpdateAny;
+    }
+
+    function canSaveProgress() {
+      return signedIn && !canUpdateAny;
     }
 
     function syncLayoutEditing() {
@@ -2785,6 +2814,8 @@
       els.mapLegend.hidden = editable;
       els.setupPanel.hidden = !editable;
       els.importPanel.hidden = !editable;
+      els.layoutWrites.hidden = !editable;
+      els.progressWrites.hidden = !canSaveProgress();
       if (savedLayouts.length) renderLayoutList(savedLayouts);
       if (!editable) {
         if (wallGesture) {
@@ -2802,10 +2833,10 @@
     }
 
     function paintSignedOut() {
+      disarmProgressAutosave();
       signedIn = false;
       canUpdateAny = false;
       els.layoutsPanel.hidden = false;
-      els.layoutWrites.hidden = true;
       els.signInBtn.hidden = false;
       els.googleButtonSlot.hidden = true;
       els.accountEmail.hidden = true;
@@ -2825,7 +2856,6 @@
       signedIn = true;
       canUpdateAny = session.canUpdateAny === true;
       els.layoutsPanel.hidden = false;
-      els.layoutWrites.hidden = false;
       els.signInBtn.hidden = true;
       els.googleButtonSlot.hidden = true;
       els.accountEmail.hidden = false;
@@ -2907,12 +2937,20 @@
       }
       clearStoredGoogleToken();
       paintSignedIn(session.email || 'Signed in', session);
+      const restored = await restoreOpenProgress();
       const list = await refreshLayouts(true);
       const count = list.length;
-      setLayoutStatus(`Signed in. ${count} saved puzzle${count === 1 ? '' : 's'}.`, 'ok');
+      const progressNote = restored ? ' Your saved progress is on the board.' : '';
+      setLayoutStatus(`Signed in. ${count} saved puzzle${count === 1 ? '' : 's'}.${progressNote}`, 'ok');
     }
 
     async function signOut() {
+      try {
+        await flushSolveProgress();
+      } catch {
+        // The session still clears. Unsent marks stay on this page until it reloads.
+      }
+      disarmProgressAutosave();
       await api('/api/session/logout', { method: 'POST' });
       clearStoredGoogleToken();
       try {
@@ -2964,8 +3002,9 @@
       setStatus(els.layoutsStatus, message, kind);
     }
 
-    async function api(path, { method = 'GET', body, auth = false } = {}) {
-      if (auth && !signedIn) throw new Error('Sign in with Google to save layouts.');
+    async function api(path, { method = 'GET', body, auth = false, authMessage } = {}) {
+      const signInMessage = authMessage || 'Sign in with Google to save layouts.';
+      if (auth && !signedIn) throw new Error(signInMessage);
       const headers = {};
       if (body !== undefined) headers['content-type'] = 'application/json';
       let response;
@@ -2987,19 +3026,17 @@
       }
       if (response.status === 401 && auth) {
         paintSignedOut();
-        throw new Error('Sign in with Google to save layouts.');
+        throw new Error(signInMessage);
       }
       if (!response.ok) throw new Error(payload?.error || `Request failed (${response.status})`);
       return payload || {};
     }
 
-    function currentLayoutPayload() {
-      const objects = [];
+    function collectMarks() {
       const marks = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const cell = board[r][c];
-          if (cell.feature) objects.push({ r, c, id: cell.feature });
           const pencil = [...cell.pencil].sort((a, b) => a - b);
           if (cell.confirmed !== null || cell.blocked || pencil.length) {
             marks.push({
@@ -3012,6 +3049,17 @@
           }
         }
       }
+      return marks;
+    }
+
+    function currentLayoutPayload() {
+      const objects = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = board[r][c];
+          if (cell.feature) objects.push({ r, c, id: cell.feature });
+        }
+      }
       return {
         title: els.layoutTitle.value.trim(),
         width: cols,
@@ -3020,7 +3068,7 @@
         walls: [...roomEdges].sort(),
         windows: [...windowEdges].sort(),
         objects,
-        marks: els.includeMarks.checked ? marks : [],
+        marks: els.includeMarks.checked ? collectMarks() : [],
       };
     }
 
@@ -3224,6 +3272,127 @@
       revealBoard();
     }
 
+    function applyMarks(marks) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = board[r][c];
+          cell.confirmed = null;
+          cell.blocked = false;
+          cell.pencil = new Set();
+        }
+      }
+      for (const mark of marks || []) {
+        const cell = board[mark.r] && board[mark.r][mark.c];
+        if (!cell) continue;
+        const confirmed = mark.confirmed == null ? null : mark.confirmed;
+        cell.confirmed = confirmed;
+        cell.blocked = !!mark.blocked && confirmed == null;
+        cell.pencil = confirmed == null && !cell.blocked ? new Set(mark.pencil || []) : new Set();
+      }
+      history = [];
+      renderGrid();
+      renderCharList();
+    }
+
+    // Guest solve marks go to /progress only. The body is { marks }.
+    // This never updates the shared layout row.
+    async function putSolveProgress(layoutId, marks) {
+      await api(`/api/layouts/${encodeURIComponent(layoutId)}/progress`, {
+        method: 'PUT',
+        body: { marks },
+        auth: true,
+        authMessage: 'Sign in with Google to save progress.',
+      });
+    }
+
+    function disarmProgressAutosave() {
+      if (progressTimer) {
+        clearTimeout(progressTimer);
+        progressTimer = 0;
+      }
+      progressToken += 1;
+      progressArmedFor = null;
+      progressDirty = false;
+    }
+
+    async function flushSolveProgress() {
+      if (!progressDirty || !canSaveProgress() || !progressArmedFor || progressArmedFor !== loadedLayoutId) return;
+      const layoutId = progressArmedFor;
+      const marks = collectMarks();
+      progressDirty = false;
+      if (progressTimer) {
+        clearTimeout(progressTimer);
+        progressTimer = 0;
+      }
+      try {
+        await putSolveProgress(layoutId, marks);
+      } catch (err) {
+        if (progressArmedFor === layoutId && loadedLayoutId === layoutId) progressDirty = true;
+        throw err;
+      }
+    }
+
+    function noteSolveEdit() {
+      if (!canSaveProgress() || !loadedLayoutId || progressArmedFor !== loadedLayoutId) return;
+      progressDirty = true;
+      const token = progressToken;
+      const layoutId = loadedLayoutId;
+      if (progressTimer) clearTimeout(progressTimer);
+      progressTimer = setTimeout(() => {
+        progressTimer = 0;
+        if (token !== progressToken || loadedLayoutId !== layoutId || progressArmedFor !== layoutId || !progressDirty) return;
+        const marks = collectMarks();
+        progressDirty = false;
+        withStatus(async () => {
+          try {
+            await putSolveProgress(layoutId, marks);
+          } catch (err) {
+            if (progressToken === token && loadedLayoutId === layoutId) progressDirty = true;
+            throw err;
+          }
+          if (progressToken === token && loadedLayoutId === layoutId) setLayoutStatus('Progress saved.', 'ok');
+        });
+      }, PROGRESS_SAVE_MS);
+    }
+
+    async function saveSolveProgress() {
+      if (!canSaveProgress()) throw new Error('Sign in with Google to save progress.');
+      if (!gridReady() || !loadedLayoutId) throw new Error('Open a saved puzzle before saving progress.');
+      const layoutId = loadedLayoutId;
+      const marks = collectMarks();
+      progressDirty = false;
+      if (progressTimer) {
+        clearTimeout(progressTimer);
+        progressTimer = 0;
+      }
+      try {
+        await putSolveProgress(layoutId, marks);
+      } catch (err) {
+        if (loadedLayoutId === layoutId) progressDirty = true;
+        throw err;
+      }
+      if (loadedLayoutId === layoutId) {
+        progressArmedFor = layoutId;
+        setLayoutStatus('Progress saved.', 'ok');
+      }
+    }
+
+    async function restoreOpenProgress() {
+      if (!canSaveProgress() || !loadedLayoutId || !gridReady()) return false;
+      const layoutId = loadedLayoutId;
+      const token = progressToken + 1;
+      disarmProgressAutosave();
+      const { progress } = await api(`/api/layouts/${encodeURIComponent(layoutId)}/progress`, {
+        auth: true,
+        authMessage: 'Sign in with Google to save progress.',
+      });
+      if (progressToken !== token || loadedLayoutId !== layoutId) return false;
+      if (progress) applyMarks(progress.marks);
+      progressArmedFor = layoutId;
+      progressDirty = false;
+      return !!progress;
+    }
+
     async function saveLayout() {
       if (!gridReady()) throw new Error('Create or load a grid before saving.');
       const payload = currentLayoutPayload();
@@ -3247,17 +3416,37 @@
     }
 
     async function loadLayoutById(id) {
+      await flushSolveProgress();
+      const token = progressToken + 1;
+      disarmProgressAutosave();
       const { layout } = await api(`/api/layouts/${id}`);
+      if (progressToken !== token) return;
       applySavedLayout(layout);
+      let restored = false;
+      if (canSaveProgress() && layout.id) {
+        const { progress } = await api(`/api/layouts/${encodeURIComponent(layout.id)}/progress`, {
+          auth: true,
+          authMessage: 'Sign in with Google to save progress.',
+        });
+        if (progressToken !== token || loadedLayoutId !== layout.id) return;
+        if (progress) {
+          applyMarks(progress.marks);
+          restored = true;
+        }
+        progressArmedFor = layout.id;
+        progressDirty = false;
+      }
       revealLibraryCurrent = true;
       renderLayoutList(savedLayouts);
-      setLayoutStatus(`Loaded "${layout.title}".`, 'ok');
+      const suffix = restored ? ' Your saved progress is on the board.' : '';
+      setLayoutStatus(`Loaded "${layout.title}".${suffix}`, 'ok');
     }
 
     async function deleteLayoutById(id, title) {
       if (!confirm(`Delete ${title || 'this puzzle'}?`)) return;
       await api(`/api/layouts/${id}`, { method: 'DELETE', auth: true });
       if (loadedLayoutId === id) {
+        disarmProgressAutosave();
         loadedLayoutId = null;
         loadedLayoutMine = false;
       }
@@ -3327,6 +3516,7 @@
       withStatus(() => importLayoutFromFile(file), setImportStatus);
     });
     els.saveLayoutBtn.addEventListener('click', () => withStatus(saveLayout));
+    els.saveProgressBtn.addEventListener('click', () => withStatus(saveSolveProgress));
     els.updateLayoutBtn.addEventListener('click', () => withStatus(updateSavedLayout));
     els.refreshLayoutsBtn.addEventListener('click', () => withStatus(() => refreshLayouts()));
     els.librarySearch.addEventListener('input', () => {
@@ -3350,6 +3540,7 @@
       }
       renderGrid();
       renderCharList();
+      noteSolveEdit();
     });
 
     els.grid.addEventListener('pointerdown', onGridPointerDown);
@@ -3390,10 +3581,10 @@
 
       const letter = e.key.length === 1 && /[a-zA-Z]/.test(e.key) ? e.key.toLowerCase() : '';
 
-      // Signed-in editing owns the letter keys, including right after Load,
+      // Library editors own the letter keys, including right after Load,
       // when the board is still in pencil mode. Furniture and obstacles use
       // their letters; E stays erase and X stays mark X. Unassigned letters
-      // do not place characters. Unsigned play keeps character letters.
+      // do not place characters. Guests and unsigned visitors keep character letters.
       if (canEditLayout()) {
         if (letter === 'e') setMode('erase');
         else if (letter === 'x') setMode('x');

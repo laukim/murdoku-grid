@@ -81,7 +81,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(port, "127.0.0.1", () => {
   console.log(`Murdoku grid helper at http://127.0.0.1:${port}`);
-  console.log("Saved puzzles are public. Sign in with Google to save or delete your own.");
+  console.log("Saved puzzles are public. Guests can save solve progress. Library editors can edit layouts.");
   if (!env.SESSION_SECRET) {
     console.log("SESSION_SECRET is unset. Unsigned play works. Sign-in needs the secret in .dev.vars.");
   }
