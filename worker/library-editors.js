@@ -1,7 +1,8 @@
 /**
  * Signed-in Google accounts that may PUT any saved layout.
  * The row keeps its original user_sub. Delete stays owner-only.
- * Everyone else, including signed-out visitors, is unchanged.
+ * Any other signed-in account is a guest: view-only on the map,
+ * with solve progress stored separately from the layout row.
  */
 export const LIBRARY_EDITOR_EMAILS = [
   "mocholateio@gmail.com",

@@ -140,6 +140,7 @@ export async function deleteLayoutById(db, userSub, id) {
   const existing = await getLayoutById(db, userSub, id);
   if (!existing) return false;
   await db.prepare("DELETE FROM layouts WHERE id = ? AND user_sub = ?").bind(id, userSub).run();
+  await db.prepare("DELETE FROM solve_progress WHERE layout_id = ?").bind(id).run();
   return true;
 }
 
@@ -231,7 +232,7 @@ function normalizeObjects(raw, width, height) {
   };
 }
 
-function normalizeMarks(raw, width, height, characterCount) {
+export function normalizeMarks(raw, width, height, characterCount) {
   if (raw == null) return { ok: true, value: [] };
   if (!Array.isArray(raw)) return { ok: false, error: "Marks must be an array" };
   if (raw.length > width * height) return { ok: false, error: "Too many marks" };

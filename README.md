@@ -15,19 +15,27 @@ Set the grid size, then mark the puzzle as you work:
 - **Pencil marks** — click or drag to note which characters could go in a cell
 - **Place a person** — long-press a cell to confirm someone’s position; row and column cross-outs apply automatically
 - **Mark X** — block a whole cell when no one can go there
-- **Obstacles and furniture** — tables, shelves, cash registers, trees, boulders, rubble, crates, bushes, cows, boars, chairs, horses, and the other map objects. A horse is furniture: people can be placed on it, and it stays one cell. A crate, bush, cow, or boar blocks the cell. Sign in to place or change them. Unsigned viewers get a legend of those icons instead of the tool buttons.
-- **Room walls and windows** — click an internal edge to cycle wall, window, and open. Drag draws or clears solid walls. A window is a wall with a gap in the middle. Sign in to edit them.
+- **Obstacles and furniture** — tables, shelves, cash registers, trees, boulders, rubble, crates, bushes, cows, boars, chairs, horses, and the other map objects. A horse is furniture: people can be placed on it, and it stays one cell. A crate, bush, cow, or boar blocks the cell. Library editors place or change them. Unsigned visitors and signed-in guests get a legend of those icons instead of the tool buttons.
+- **Room walls and windows** — click an internal edge to cycle wall, window, and open. Drag draws or clears solid walls. A window is a wall with a gap in the middle. Library editors edit them.
 - **Character colors** — A–Z (and V for the victim) each have their own color
-- **Create grid / Open a board** — set a size, paste a playground board, or import JSON. Sign in to use these
-- **Saved puzzles** — the list of every saved layout is visible without an account. Titles such as Vol1 #5 come before Vol1 #11. Unsigned visitors see titles only, in a searchable list with volume filters. Previous and next, including the left and right arrow keys, move through that order and stop at the ends. Sign in to create a grid, open a board, edit walls, windows, furniture, and obstacles, or to save, update, or delete your own.
+- **Create grid / Open a board** — set a size, paste a playground board, or import JSON. Library editors use these
+- **Saved puzzles** — the list of every saved layout is visible without an account. Titles such as Vol1 #5 come before Vol1 #11. Unsigned visitors and signed-in guests see titles only, in a searchable list with volume filters. Previous and next, including the left and right arrow keys, move through that order and stop at the ends. A guest can save solve progress for each puzzle. The two library editors can create a grid, open a board, edit walls, windows, furniture, and obstacles, and save or update layouts. Delete stays with the account that owns the row.
 
-Keyboard shortcuts: letter keys select a character until you sign in. Signed in, the letter on each furniture or obstacle selects that tool. Horse is `Y`, crate is `N`, bush is `F`, cow is `K`, and boar is `J`. `X` marks a cell and `E` erases.
+Keyboard shortcuts: letter keys select a character for an unsigned visitor and for a signed-in guest. A library editor uses the letter on each furniture or obstacle to select that tool. Horse is `Y`, crate is `N`, bush is `F`, cow is `K`, and boar is `J`. `X` marks a cell and `E` erases.
 
 Clear all removes pencil marks, placements, and X cells. Room walls and objects stay, so a loaded layout can be marked again.
 
 ## Auth
 
-Anyone can list and open saved puzzles. Without sign-in the page is load-and-view: the library is a searchable list of titles with volume filters, the board sits in front, and a legend shows furniture and obstacle icons. Previous and next (and the arrow keys) open the neighboring puzzle in that sorted list and stop at the first and last titles. Create grid, Open a board, and the wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work. Save, update, and delete need a signed-in session. A new puzzle is stored under the Google account `sub`. Delete only changes rows with the same `sub`. Update does too, except for the two accounts in `worker/library-editors.js`: `mocholateio@gmail.com` and `kim.lau817@gmail.com`. Signed in as either of those, the session can `PUT` any saved layout, including one created by the other account. The row keeps its original `user_sub`. Other Google accounts still cannot update someone else’s layout. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`. The list puts numbered titles first, in numeric order, then other titles newest first.
+Anyone can list and open saved puzzles. There are three ways to use the page.
+
+**Unsigned.** The page is load-and-view: the library is a searchable list of titles with volume filters, the board sits in front, and a legend shows furniture and obstacle icons. Previous and next (and the arrow keys) open the neighboring puzzle in that sorted list and stop at the first and last titles. Create grid, Open a board, and the wall, furniture, and obstacle tools stay hidden, and clicking the grid does not add or remove rooms or objects. Pencil marks, placements, and X cells still work on this browser only. Nothing is stored for that visitor.
+
+**Guest.** A guest is any Google account that is not one of the two library editors. Sign-in keeps the unsigned layout: the same hidden tools, the same legend, and the same character letter keys. Create grid, Open a board, import, and wall, furniture, and obstacle tools stay hidden. Clicking the grid still does not add or remove rooms or objects. The guest can save pencil marks, placements, and X cells for each puzzle. **Save progress** writes them immediately, and edits also save on their own a moment later. Opening that puzzle again, including on a later visit or another device, puts those marks back on the board. The save is tied to the session `sub` and the puzzle id. It is stored in `solve_progress`, not on the shared layout row, so walls, windows, objects, title, and anyone else’s marks stay as they were. An empty save is kept, so a cleared board comes back cleared instead of showing marks that were stored on the layout. Unsigned visitors never get a progress row.
+
+**Library editors.** `mocholateio@gmail.com` and `kim.lau817@gmail.com`, listed in `worker/library-editors.js`, keep the full editor. Signed in as either of them, the page shows Create grid, Open a board, the map tools, Save current, and Update saved. The session can `PUT` any saved layout, including one created by the other account. The row keeps its original `user_sub`. Letter keys select furniture and obstacles. Delete stays owner-only for these accounts too: it only removes a row whose `user_sub` is the session `sub`.
+
+A new puzzle is stored under the Google account `sub`. An owner can still `PUT` or `DELETE` their own row from the API. Other Google accounts cannot update someone else’s layout. A `user_sub` field in the JSON body is ignored, and responses do not include `sub`. The list puts numbered titles first, in numeric order, then other titles newest first. Deleting a layout also removes every account’s saved progress for that puzzle.
 
 The page still uses Google Identity Services for the sign-in button, with the same public OAuth client as `laukim/cube-learning` (`3x3coach`). The client id lives in `js/google-client.js`. There is no client secret. Sign-in itself is not allowlisted. The only email check is the two library editors above, and it applies to `PUT` only. `auto_select` stays false. Google is only the first identity check: the browser posts the ID token once to `POST /api/session`. The Worker checks it with Google’s published keys (RS256, `accounts.google.com`, `email_verified`), then forgets it.
 
@@ -63,9 +71,12 @@ This repo cannot change the Google Cloud console. Add the origin there before th
 | `POST` | `/api/session/logout` | | Clears the session cookie when the request sent one. `{ signedIn: false }` |
 | `GET` | `/api/layouts` | | `{ layouts: [{ id, title, width, height, created_at, updated_at, mine? }] }` for every saved layout. No auth. `mine: true` when the session cookie owns that row |
 | `POST` | `/api/layouts` | layout | `201 { layout }`. Session cookie required |
-| `GET` | `/api/layouts/:id` | | `{ layout }` for any saved id. No auth. `mine: true` when the session cookie owns it |
+| `GET` | `/api/layouts/:id` | | `{ layout }` for any saved id. No auth. `mine: true` when the session cookie owns it. Marks here are the shared layout’s marks, not a guest’s progress |
 | `PUT` | `/api/layouts/:id` | layout | `{ layout }`. Session cookie required. The account must own the row, or its email must be one of the two library editors. An editor update leaves `user_sub` unchanged |
-| `DELETE` | `/api/layouts/:id` | | `{ ok: true }`. Session cookie required, and only for that account’s row |
+| `DELETE` | `/api/layouts/:id` | | `{ ok: true }`. Session cookie required, and only for that account’s row. Also deletes every `solve_progress` row for that puzzle |
+| `GET` | `/api/layouts/:id/progress` | | `{ progress: { marks, updated_at } }` or `{ progress: null }`. Session cookie required. Only that account’s marks. `401` without a usable session. `404` when the layout does not exist |
+| `PUT` | `/api/layouts/:id/progress` | `{ "marks": [ ... ] }` | `{ progress }`. Session cookie required. Writes `solve_progress` for that `sub` and puzzle. Title, walls, windows, objects, characters, and `user_sub` in the body are ignored. The `layouts` row is not updated. `400` when marks do not fit the puzzle. `404` when the layout does not exist |
+| `DELETE` | `/api/layouts/:id/progress` | | `{ ok: true }`. Session cookie required. Removes that account’s progress for the puzzle. `404` when the layout does not exist |
 
 `width` is the column count and `height` is the row count (2–20). A layout body:
 
@@ -85,11 +96,11 @@ This repo cannot change the Google Cloud console. Add the origin there before th
 - `walls` are internal borders. `h,r,c` is the horizontal line under row `r` at column `c`. `v,r,c` is the vertical line to the right of column `c` in row `r`.
 - `windows` uses the same keys. A window is drawn with a gap and is not also stored as a solid wall. Omit it, or send `[]`, when the board has none.
 - `objects` is optional. Each entry is a furniture or obstacle id on a cell (`table`, `tree`, `chair`, `cash-register`, …). An empty array is a room-only layout; load it and add objects later. Object ids are lowercase slugs, so new kinds can be stored without a schema change. `register` and `cashRegister` are stored as `cash-register`.
-- `marks` is optional solving state: pencil indexes, a confirmed character index, or an X (`blocked`). Uncheck “Save pencil marks and placements” to store only the rooms and objects.
+- `marks` on a layout is optional solving state stored with that shared row: pencil indexes, a confirmed character index, or an X (`blocked`). Library editors uncheck “Save pencil marks and placements” to store only the rooms and objects. A guest’s solve progress uses the same mark shape, but it is saved with `PUT /api/layouts/:id/progress` and is not written onto this row.
 
 ## Import a layout file
 
-The page’s **Import JSON** button is on Open a board, which is shown after Google sign-in. It reads a local file and draws it with the same room walls, cells, and object tools. Nothing is downloaded. After import, add obstacles or marks. **Save current** is on the signed-in puzzle list and stores the layout in D1 for that Google account.
+The page’s **Import JSON** button is on Open a board, which is shown to library editors. It reads a local file and draws it with the same room walls, cells, and object tools. Nothing is downloaded. After import, add obstacles or marks. **Save current** is on the signed-in puzzle list and stores the layout in D1 for that Google account.
 
 `examples/garden-path.json` is a small handmade sample, not a puzzle catalog:
 
@@ -129,7 +140,7 @@ node scripts/import-layout.mjs ./my-layout.json \
 
 ## Playground board paste
 
-Sign in, then paste one board at a time into **Paste playground board** and choose **Convert paste**. The grid draws the rooms. Add marks with the existing tools. **Save current** stores it in D1. This does not fetch the playground site.
+A library editor pastes one board at a time into **Paste playground board** and chooses **Convert paste**. The grid draws the rooms. Add marks with the existing tools. **Save current** stores it in D1. This does not fetch the playground site.
 
 Two inputs convert to the same `h,r,c` / `v,r,c` walls:
 
@@ -152,7 +163,9 @@ After row 3 is `h,2,0` … `h,2,5`. After column 3 is `v,0,2` … `v,5,2`. The c
 
 ## Schema
 
-`migrations/0001_layouts.sql` creates the table. `migrations/0002_user_sub.sql` adds the owner column. `migrations/0003_windows.sql` adds `windows_json`:
+`migrations/0001_layouts.sql` creates `layouts`. `migrations/0002_user_sub.sql` adds the owner column. `migrations/0003_windows.sql` adds `windows_json`. `migrations/0004_solve_progress.sql` creates `solve_progress`.
+
+`layouts`:
 
 - `id` — text primary key (UUID)
 - `user_sub` — Google account `sub` that owns the row
@@ -161,11 +174,17 @@ After row 3 is `h,2,0` … `h,2,5`. After column 3 is `v,0,2` … `v,5,2`. The c
 - `walls_json` — room borders
 - `windows_json` — window edges, same keys as walls
 - `objects_json` — furniture and obstacles; safe to update on a later save
-- `marks_json` — pencil marks, placements, and X cells
+- `marks_json` — pencil marks, placements, and X cells saved with the shared layout
 - `characters_json` — labels, which also drive the colors
 - `created_at`, `updated_at` — ISO-8601 timestamps
 
-`0002` and `0003` are plain `ALTER TABLE` statements. Run them once with `npm run db:migrate` before deploying the Worker that expects `user_sub` and `windows_json`. If migrate reports a duplicate column, the column is already present; continue with `npm run deploy`. The Worker also adds a missing column when it opens, so a database created by an earlier migration still loads.
+`solve_progress` is one row per Google account and puzzle:
+
+- `user_sub`, `layout_id` — primary key. `user_sub` is the session `sub`. `layout_id` is the layout id
+- `marks_json` — that account’s pencil marks, placements, and X cells
+- `updated_at` — ISO-8601 timestamp of the last progress save
+
+`0002` and `0003` are plain `ALTER TABLE` statements. `0004` creates `solve_progress`. Run them once with `npm run db:migrate` before deploying the Worker that expects `user_sub`, `windows_json`, and `solve_progress`. If migrate reports a duplicate column, the column is already present; continue with `npm run deploy`. The Worker also adds a missing column, and creates `solve_progress` if it is missing, when it opens, so a database created by an earlier migration still loads.
 
 ## Local
 
@@ -175,7 +194,7 @@ API tests use an in-memory D1 stand-in (no Cloudflare login):
 npm test
 ```
 
-Click through the UI the same way. The board, paste, and import work before sign-in. Save and load ask for Google, which needs `SESSION_SECRET` in `.dev.vars` (see above).
+Click through the UI the same way. The board works before sign-in. Paste and import are for library editors. A guest saves solve progress after Google sign-in, which needs `SESSION_SECRET` in `.dev.vars` (see above). Unsigned marks stay in the browser.
 
 ```bash
 npm run dev:local
